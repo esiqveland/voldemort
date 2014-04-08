@@ -72,9 +72,12 @@ import com.google.common.collect.ImmutableList;
 public class VoldemortConfig implements Serializable {
 
     private static final long serialVersionUID = 1;
+
+    public static final String NEW_ACTIVE_NODE_STRING = "NEW";
     public static final String VOLDEMORT_HOME_VAR_NAME = "VOLDEMORT_HOME";
     public static final String VOLDEMORT_CONFIG_DIR = "VOLDEMORT_CONFIG_DIR";
     private static final String VOLDEMORT_NODE_ID_VAR_NAME = "VOLDEMORT_NODE_ID";
+
     public static int VOLDEMORT_DEFAULT_ADMIN_PORT = 6660;
     public static final long REPORTING_INTERVAL_BYTES = 25 * 1024 * 1024;
     public static final int DEFAULT_BUFFER_SIZE = 64 * 1024;
@@ -265,7 +268,18 @@ public class VoldemortConfig implements Serializable {
         this(new Props(props));
     }
 
+    /**
+     * Empty constructor to allow for subclassing with ZooKeeper configuration.
+     * */
+    public  VoldemortConfig() {
+
+    }
+
     public VoldemortConfig(Props props) {
+        setProps(props);
+    }
+
+    protected void setProps(Props props) {
         try {
             this.nodeId = props.getInt("node.id");
         } catch(UndefinedPropertyException e) {

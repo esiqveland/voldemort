@@ -86,8 +86,14 @@ public class VoldemortServer extends AbstractService {
         super(ServiceType.VOLDEMORT);
         this.voldemortConfig = config;
         this.storeRepository = new StoreRepository(config.isJmxEnabled());
-        this.metadata = MetadataStore.readFromDirectory(new File(this.voldemortConfig.getMetadataDirectory()),
+
+        if(config instanceof VoldemortZooKeeperConfig) {
+            this.metadata = MetadataStore.readFromZooKeeper((VoldemortZooKeeperConfig) config);
+        } else {
+            this.metadata = MetadataStore.readFromDirectory(new File(this.voldemortConfig.getMetadataDirectory()),
                                                         voldemortConfig.getNodeId());
+        }
+
         this.identityNode = metadata.getCluster().getNodeById(voldemortConfig.getNodeId());
         this.checkHostName();
         this.validateRestServiceConfiguration();
@@ -326,6 +332,7 @@ public class VoldemortServer extends AbstractService {
     protected void startInner() throws VoldemortException {
         // lock down jvm heap
         JNAUtils.tryMlockall();
+
         logger.info("Starting " + services.size() + " services.");
         long start = System.currentTimeMillis();
         for(VoldemortService service: services)
@@ -358,8 +365,10 @@ public class VoldemortServer extends AbstractService {
 
         if(exceptions.size() > 0)
             throw exceptions.get(0);
+
         // release lock of jvm heap
         JNAUtils.tryMunlockall();
+
     }
 
     public static void main(String[] args) throws Exception {
@@ -371,9 +380,14 @@ public class VoldemortServer extends AbstractService {
                 config = VoldemortConfig.loadFromVoldemortHome(args[0]);
             else if(args.length == 2)
                 config = VoldemortConfig.loadFromVoldemortHome(args[0], args[1]);
+            else if(args.length == 3)
+                if (args[2].contains("zk:")) {
+                    config = VoldemortZooKeeperConfig.loadFromZooKeeper(args[0], args[1], args[2].substring(3));
+                }
             else
                 croak("USAGE: java " + VoldemortServer.class.getName()
-                      + " [voldemort_home_dir] [voldemort_config_dir]");
+                      + " [voldemort_home_dir] [voldemort_config_dir] [zookeeperurl: zk:host:port/chroot]");
+
         } catch(Exception e) {
             logger.error(e);
             Utils.croak("Error while loading configuration: " + e.getMessage());

@@ -1,0 +1,30 @@
+<cluster>
+  <name>picluster</name>
+  <server>
+    <id>0</id>
+    <host>192.168.0.210</host>
+    <http-port>8081</http-port>
+    <socket-port>6666</socket-port>
+    <admin-port>6667</admin-port>
+    <rest-port>8085</rest-port>
+    <partitions>4, 3, 8, 0, 13, 11</partitions>
+  </server>
+  <server>
+    <id>1</id>
+    <host>192.168.0.211</host>
+    <http-port>8081</http-port>
+    <socket-port>6666</socket-port>
+    <admin-port>6667</admin-port>
+    <rest-port>8085</rest-port>
+    <partitions>7, 1, 6, 15, 9</partitions>
+  </server>
+  <server>
+    <id>2</id>
+    <host>192.168.0.212</host>
+    <http-port>8081</http-port>
+    <socket-port>6666</socket-port>
+    <admin-port>6667</admin-port>
+    <rest-port>8085</rest-port>
+    <partitions>12, 2, 10, 14, 5</partitions>
+  </server>
+</cluster>

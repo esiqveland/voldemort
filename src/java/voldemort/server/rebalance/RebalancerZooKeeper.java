@@ -48,7 +48,7 @@ import com.google.common.collect.Lists;
  * was shut down and the box was restarted
  * 
  */
-public class Rebalancer implements Runnable {
+public class RebalancerZooKeeper implements Runnable {
 
     private final static Logger logger = Logger.getLogger(Rebalancer.class);
 
@@ -200,15 +200,6 @@ public class Rebalancer implements Runnable {
                     previousRebalancingSourceStores = metadataStore.getRebalancingSourceStores();
                     if(!rollback) {
 
-                        // Save up the current cluster and stores def for
-                        // Redirecting store
-                        changeClusterAndStores(MetadataStore.REBALANCING_SOURCE_CLUSTER_XML,
-                                               currentCluster,
-                                               // Save the current store defs
-                                               // for Redirecting store
-                                               MetadataStore.REBALANCING_SOURCE_STORES_XML,
-                                               currentStoreDefs);
-
                         completedRebalanceSourceClusterChange = true;
 
                         for(RebalanceTaskInfo info: rebalanceTaskInfo) {
@@ -216,13 +207,6 @@ public class Rebalancer implements Runnable {
                             completedRebalanceTaskInfo.add(info);
                         }
                     } else {
-                        // Reset the rebalancing source cluster back to null
-
-                        changeClusterAndStores(MetadataStore.REBALANCING_SOURCE_CLUSTER_XML, null,
-                                               // Reset the rebalancing source
-                                               // stores back to null
-                                               MetadataStore.REBALANCING_SOURCE_STORES_XML,
-                                               null);
 
                         completedRebalanceSourceClusterChange = true;
 
@@ -241,10 +225,6 @@ public class Rebalancer implements Runnable {
                 logger.info("Switching cluster metadata from " + currentCluster + " to " + cluster);
                 logger.info("Switching stores metadata from " + currentStoreDefs + " to "
                             + storeDefs);
-                changeClusterAndStores(MetadataStore.CLUSTER_KEY,
-                                       cluster,
-                                       MetadataStore.STORES_KEY,
-                                       storeDefs);
 
                 completedClusterAndStoresChange = true;
 
@@ -404,6 +384,37 @@ public class Rebalancer implements Runnable {
         } finally {
             metadataStore.writeLock.unlock();
         }
+    }
+    
+    private void changeClusterAndStoresZooKeeper(String clusterKey,
+                                                final Cluster cluster,
+                                                 String storesKey,
+                                                 final List<StoreDefinition> storeDefs) {
+
+        metadataStore.writeLock.lock();
+        try {
+            logger.info("Starting in changeClusterAndStores");
+            VectorClock updatedVectorClock = ((VectorClock) metadataStore.get(clusterKey, null)
+                    .get(0)
+                    .getVersion()).incremented(metadataStore.getNodeId(),
+                    System.currentTimeMillis());
+
+            metadataStore.put(clusterKey, Versioned.value((Object) cluster, updatedVectorClock));
+
+            // now put new stores
+            updatedVectorClock = ((VectorClock) metadataStore.get(storesKey, null)
+                    .get(0)
+                    .getVersion()).incremented(metadataStore.getNodeId(),
+                    System.currentTimeMillis());
+            metadataStore.put(storesKey, Versioned.value((Object) storeDefs, updatedVectorClock));
+
+        } catch(Exception e) {
+            logger.info("Error while changing cluster to " + cluster + "for key " + clusterKey);
+            throw new VoldemortException(e);
+        } finally {
+            metadataStore.writeLock.unlock();
+        }
+
     }
 
     /**
