@@ -26,8 +26,16 @@ import java.net.Socket;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
@@ -70,6 +78,8 @@ import voldemort.store.StoreDefinition;
 import voldemort.store.StoreUtils;
 import voldemort.store.metadata.MetadataStore;
 import voldemort.store.metadata.MetadataStore.VoldemortState;
+import voldemort.store.quota.QuotaType;
+import voldemort.store.quota.QuotaUtils;
 import voldemort.store.readonly.ReadOnlyStorageConfiguration;
 import voldemort.store.readonly.ReadOnlyStorageFormat;
 import voldemort.store.readonly.ReadOnlyStorageMetadata;
@@ -91,6 +101,7 @@ import voldemort.utils.RebalanceUtils;
 import voldemort.utils.StoreDefinitionUtils;
 import voldemort.utils.Utils;
 import voldemort.versioning.VectorClock;
+import voldemort.versioning.VectorClockUtils;
 import voldemort.versioning.Version;
 import voldemort.versioning.Versioned;
 import voldemort.xml.ClusterMapper;
@@ -143,9 +154,10 @@ public class AdminClient {
     private final NetworkClassLoader networkClassLoader;
     private final AdminClientConfig adminClientConfig;
     private Cluster currentCluster;
-    private SystemStoreClient<String, String> sysStoreClient = null;
-    private String[] cachedBootstrapURLs = null;
+    private SystemStoreClient<String, String> metadataVersionSysStoreClient = null;
+    private SystemStoreClient<String, String> quotaSysStoreClient = null;
     private SystemStoreClientFactory<String, String> systemStoreFactory = null;
+    private String mainBootstrapUrl = null;
 
     final public AdminClient.HelperOperations helperOps;
     final public AdminClient.ReplicationOperations replicaOps;
@@ -159,6 +171,7 @@ public class AdminClient {
     final public AdminClient.RestoreOperations restoreOps;
     final public AdminClient.RebalancingOperations rebalanceOps;
     final public AdminClient.ReadOnlySpecificOperations readonlyOps;
+    final public AdminClient.QuotaManagementOperations quotaMgmtOps;
 
     /**
      * Common initialization of AdminClient.
@@ -182,6 +195,7 @@ public class AdminClient {
         this.restoreOps = this.new RestoreOperations();
         this.rebalanceOps = this.new RebalancingOperations();
         this.readonlyOps = this.new ReadOnlySpecificOperations();
+        this.quotaMgmtOps = this.new QuotaManagementOperations();
 
         this.errorMapper = new ErrorCodeMapper();
         this.networkClassLoader = new NetworkClassLoader(Thread.currentThread()
@@ -190,6 +204,12 @@ public class AdminClient {
         this.adminClientConfig = adminClientConfig;
         this.socketPool = helperOps.createSocketPool(adminClientConfig);
         this.adminStoreClient = new AdminStoreClient(clientConfig);
+        try {
+            if(clientConfig.getBootstrapUrls().length > 0) {
+                this.mainBootstrapUrl = clientConfig.getBootstrapUrls()[0];
+            }
+        }
+        catch(IllegalStateException e) {}
     }
 
     /**
@@ -210,8 +230,9 @@ public class AdminClient {
                        AdminClientConfig adminClientConfig,
                        ClientConfig clientConfig) {
         this(adminClientConfig, clientConfig);
+        this.mainBootstrapUrl = bootstrapURL;
         this.currentCluster = helperOps.getClusterFromBootstrapURL(bootstrapURL);
-        helperOps.cacheSystemStoreParams(bootstrapURL);
+        helperOps.initSystemStoreClient(this.mainBootstrapUrl, Zone.UNSET_ZONE_ID);
     }
 
     /**
@@ -232,10 +253,9 @@ public class AdminClient {
                        AdminClientConfig adminClientConfig,
                        ClientConfig clientConfig) {
         this(adminClientConfig, clientConfig);
+        this.mainBootstrapUrl = cluster.getNodes().iterator().next().getSocketUrl().toString();
         this.currentCluster = cluster;
-        Node node = cluster.getNodeById(cluster.getNodeIds().iterator().next());
-        String bootstrapURL = "tcp://" + node.getHost() + ":" + node.getSocketPort();
-        helperOps.cacheSystemStoreParams(bootstrapURL);
+        helperOps.initSystemStoreClient(mainBootstrapUrl, Zone.UNSET_ZONE_ID);
     }
 
     /**
@@ -258,7 +278,7 @@ public class AdminClient {
                        ClientConfig clientConfig,
                        int zoneID) {
         this(bootstrapURL, adminClientConfig, clientConfig);
-        helperOps.cacheSystemStoreParams(bootstrapURL, zoneID);
+        helperOps.initSystemStoreClient(bootstrapURL, zoneID);
     }
 
     /**
@@ -267,6 +287,10 @@ public class AdminClient {
     public void close() {
         this.socketPool.close();
         this.adminStoreClient.close();
+
+        if(systemStoreFactory != null) {
+            systemStoreFactory.close();
+        }
     }
 
     /**
@@ -315,43 +339,35 @@ public class AdminClient {
     public class HelperOperations {
 
         /**
-         * Cache the paramater values for the internal system store client.
-         * These cached values are used every time the system store client needs
-         * to be initialized (useful when the cluster.xml changes).
-         * 
-         * @param bootstrapURL The URL to bootstrap from
-         * @param zoneID Indicates the primary zone of the sytem store client
-         */
-        private void cacheSystemStoreParams(String bootstrapURL, int zoneID) {
-            String[] bootstrapUrls = new String[1];
-            bootstrapUrls[0] = bootstrapURL;
-            AdminClient.this.cachedBootstrapURLs = bootstrapUrls;
-        }
-
-        private void cacheSystemStoreParams(String bootstrapURL) {
-            String[] bootstrapUrls = new String[1];
-            bootstrapUrls[0] = bootstrapURL;
-            AdminClient.this.cachedBootstrapURLs = bootstrapUrls;
-        }
-
-        /**
          * Create a system store client based on the cached bootstrap URLs and
          * Zone ID
+         * 
+         * Two system store clients are created currently.
+         * 
+         * 1) metadata version store
+         * 
+         * 2) quota store
          */
-        private void initSystemStoreClient() {
-            if(AdminClient.this.cachedBootstrapURLs != null) {
-                try {
-                    if(systemStoreFactory == null) {
-                        ClientConfig clientConfig = new ClientConfig();
-                        clientConfig.setBootstrapUrls(AdminClient.this.cachedBootstrapURLs);
-                        systemStoreFactory = new SystemStoreClientFactory<String, String>(clientConfig);
-                    }
+        private void initSystemStoreClient(String bootstrapURL, int zoneId) {
 
-                    sysStoreClient = systemStoreFactory.createSystemStore(SystemStoreConstants.SystemStoreName.voldsys$_metadata_version_persistence.name());
-                } catch(Exception e) {
-                    logger.debug("Error while creating a system store client for metadata version store.");
+            String[] bootstrapUrls = new String[1];
+            bootstrapUrls[0] = bootstrapURL;
+
+            try {
+                if(systemStoreFactory == null) {
+                    ClientConfig clientConfig = new ClientConfig();
+                    clientConfig.setBootstrapUrls(bootstrapUrls);
+                    clientConfig.setClientZoneId(zoneId);
+                    systemStoreFactory = new SystemStoreClientFactory<String, String>(clientConfig);
                 }
+                String metadataVersionStoreName = SystemStoreConstants.SystemStoreName.voldsys$_metadata_version_persistence.name();
+                String quotaStoreName = SystemStoreConstants.SystemStoreName.voldsys$_store_quotas.name();
+                metadataVersionSysStoreClient = systemStoreFactory.createSystemStore(metadataVersionStoreName, null, null);
+                quotaSysStoreClient = systemStoreFactory.createSystemStore(quotaStoreName, null, null);
+            } catch(Exception e) {
+                logger.debug("Error while creating a system store client for metadata version store/quota store.");
             }
+
         }
 
         private Cluster getClusterFromBootstrapURL(String bootstrapURL) {
@@ -422,6 +438,19 @@ public class AdminClient {
                                               .build();
         }
 
+        public List<StoreDefinition> getStoresInCluster() {
+            int firstRemoteNodeId = currentCluster.getNodeIds().iterator().next();
+            return metadataMgmtOps.getRemoteStoreDefList(firstRemoteNodeId).getValue();
+        }
+
+        public boolean checkStoreExistsInCluster(String storeName) {
+            List<String> storesInCluster = StoreDefinitionUtils.getStoreNames(getStoresInCluster());
+            if(storesInCluster.contains(storeName)) {
+                return true;
+            } else {
+                return false;
+            }
+        }
     }
 
     public class ReplicationOperations {
@@ -858,19 +887,18 @@ public class AdminClient {
          *        incremented
          */
         public void updateMetadataversion(String versionKey) {
-            updateMetadataversion(Arrays.asList(new String[]{versionKey}));
+            updateMetadataversion(Arrays.asList(new String[] { versionKey }));
         }
 
         /**
-         * Update the metadata versions for the given keys (cluster or store). The
-         * new value set is the current timestamp.
-         *
+         * Update the metadata versions for the given keys (cluster or store).
+         * The new value set is the current timestamp.
+         * 
          * @param versionKeys The metadata keys for which Version should be
          *        incremented
          */
         public void updateMetadataversion(Collection<String> versionKeys) {
-            helperOps.initSystemStoreClient();
-            Properties props = MetadataVersionStoreUtils.getProperties(AdminClient.this.sysStoreClient);
+            Properties props = MetadataVersionStoreUtils.getProperties(AdminClient.this.metadataVersionSysStoreClient);
             for(String versionKey: versionKeys) {
                 long newValue = 0;
                 if(props != null && props.getProperty(versionKey) != null) {
@@ -884,7 +912,8 @@ public class AdminClient {
                 }
                 props.setProperty(versionKey, Long.toString(newValue));
             }
-            MetadataVersionStoreUtils.setProperties(AdminClient.this.sysStoreClient, props);
+            MetadataVersionStoreUtils.setProperties(AdminClient.this.metadataVersionSysStoreClient,
+                                                    props);
         }
 
         /**
@@ -894,8 +923,8 @@ public class AdminClient {
          *        the nodes in the cluster
          */
         public void setMetadataversion(Properties newProperties) {
-            helperOps.initSystemStoreClient();
-            MetadataVersionStoreUtils.setProperties(AdminClient.this.sysStoreClient, newProperties);
+            MetadataVersionStoreUtils.setProperties(AdminClient.this.metadataVersionSysStoreClient,
+                                                    newProperties);
         }
 
         /**
@@ -958,20 +987,19 @@ public class AdminClient {
         public void updateRemoteMetadata(List<Integer> remoteNodeIds,
                                          String key,
                                          Versioned<String> value) {
-            for(Integer currentNodeId: remoteNodeIds) {
-               logger.info("Setting " + key + " for "
-                                   + getAdminClientCluster().getNodeById(currentNodeId).getHost()
-                                   + ":"
-                                   + getAdminClientCluster().getNodeById(currentNodeId).getId());
-                updateRemoteMetadata(currentNodeId, key, value);
-            }
 
             /*
-             * Assuming everything is fine, we now increment the metadata
-             * version for the key
+             * Assume everything will be fine, increment the metadata version for the key
+             * Would not harm even if the operation fails
              */
             if(key.equals(CLUSTER_VERSION_KEY) || key.equals(STORES_VERSION_KEY)) {
                 metadataMgmtOps.updateMetadataversion(key);
+            }
+            for(Integer currentNodeId: remoteNodeIds) {
+                logger.info("Setting " + key + " for "
+                            + getAdminClientCluster().getNodeById(currentNodeId).getHost() + ":"
+                            + getAdminClientCluster().getNodeById(currentNodeId).getId());
+                updateRemoteMetadata(currentNodeId, key, value);
             }
         }
 
@@ -991,11 +1019,13 @@ public class AdminClient {
                                              String storesKey,
                                              Versioned<String> storesValue) {
             ByteArray clusterKeyBytes = new ByteArray(ByteUtils.getBytes(clusterKey, "UTF-8"));
-            Versioned<byte[]> clusterValueBytes = new Versioned<byte[]>(ByteUtils.getBytes(clusterValue.getValue(), "UTF-8"),
+            Versioned<byte[]> clusterValueBytes = new Versioned<byte[]>(ByteUtils.getBytes(clusterValue.getValue(),
+                                                                                           "UTF-8"),
                                                                         clusterValue.getVersion());
 
             ByteArray storesKeyBytes = new ByteArray(ByteUtils.getBytes(storesKey, "UTF-8"));
-            Versioned<byte[]> storesValueBytes = new Versioned<byte[]>(ByteUtils.getBytes(storesValue.getValue(), "UTF-8"),
+            Versioned<byte[]> storesValueBytes = new Versioned<byte[]>(ByteUtils.getBytes(storesValue.getValue(),
+                                                                                          "UTF-8"),
                                                                        storesValue.getVersion());
 
             VAdminProto.VoldemortAdminRequest request = VAdminProto.VoldemortAdminRequest.newBuilder()
@@ -1010,14 +1040,13 @@ public class AdminClient {
             VAdminProto.UpdateMetadataPairResponse.Builder response = rpcOps.sendAndReceive(remoteNodeId,
                                                                                             request,
                                                                                             VAdminProto.UpdateMetadataPairResponse.newBuilder());
-            if (response.hasError())
+            if(response.hasError())
                 helperOps.throwException(response.getError());
         }
 
-
         /**
-         * Wrapper for updateRemoteMetadataPair function used against a single Node
-         * It basically loops over the entire list of Nodes that we need to
+         * Wrapper for updateRemoteMetadataPair function used against a single
+         * Node It basically loops over the entire list of Nodes that we need to
          * execute the required operation against. It also increments the
          * version of the corresponding metadata in the system store.
          * 
@@ -1033,32 +1062,97 @@ public class AdminClient {
                                              Versioned<String> clusterValue,
                                              String storesKey,
                                              Versioned<String> storesValue) {
-            for (Integer currentNodeId: remoteNodeIds) {
-                logger.info("Setting " + clusterKey + " and " + storesKey + " for "
-                                   + getAdminClientCluster().getNodeById(currentNodeId).getHost()
-                                   + ":" + getAdminClientCluster().getNodeById(currentNodeId).getId());
-                updateRemoteMetadataPair(currentNodeId, clusterKey, clusterValue, storesKey, storesValue);
-            }
+
             /*
-             * Assuming everything is fine, we now increment the metadata
-             * version for the cluster and the stores
+             * We first increment the metadata version for the cluster and the stores
+             * which does not harm even if the operation fail
              */
-            if (clusterKey.equals(CLUSTER_VERSION_KEY)) {
+            if(clusterKey.equals(CLUSTER_VERSION_KEY)) {
                 metadataMgmtOps.updateMetadataversion(clusterKey);
             }
-            if (storesKey.equals(STORES_VERSION_KEY)) {
+            if(storesKey.equals(STORES_VERSION_KEY)) {
                 StoreDefinitionsMapper storeDefsMapper = new StoreDefinitionsMapper();
                 List<StoreDefinition> storeDefs = storeDefsMapper.readStoreList(new StringReader(storesValue.getValue()));
-                if (storeDefs != null) {
+                if(storeDefs != null) {
                     try {
                         for(StoreDefinition storeDef: storeDefs) {
-                            logger.info("Updating metadata version for stores: " + storeDef.getName());
+                            logger.info("Updating metadata version for stores: "
+                                        + storeDef.getName());
                             metadataMgmtOps.updateMetadataversion(storeDef.getName());
                         }
                     } catch(Exception e) {
                         System.err.println("Error while updating metadata version for the specified store.");
                     }
                 }
+            }
+            for(Integer currentNodeId: remoteNodeIds) {
+                logger.info("Setting " + clusterKey + " and " + storesKey + " for "
+                        + getAdminClientCluster().getNodeById(currentNodeId).getHost() + ":"
+                        + getAdminClientCluster().getNodeById(currentNodeId).getId());
+                updateRemoteMetadataPair(currentNodeId,
+                        clusterKey,
+                        clusterValue,
+                        storesKey,
+                        storesValue);
+            }
+        }
+
+        /**
+         * Helper method to fetch the current stores xml list and update the
+         * specified stores
+         * 
+         * @param nodeId ID of the node for which the stores list has to be
+         *        updated
+         * @param updatedStores New version of the stores to be updated
+         */
+        public synchronized void fetchAndUpdateRemoteStore(int nodeId,
+                                                           List<StoreDefinition> updatedStores) {
+            Map<String, StoreDefinition> updatedStoresMap = new HashMap<String, StoreDefinition>();
+
+            // Fetch the original store definition list
+            Versioned<List<StoreDefinition>> originalStoreDefinitions = getRemoteStoreDefList(nodeId);
+            if(originalStoreDefinitions == null) {
+                throw new VoldemortException("No stores found at this node ID : " + nodeId);
+            }
+
+            List<StoreDefinition> originalstoreDefList = originalStoreDefinitions.getValue();
+            List<StoreDefinition> finalStoreDefList = new ArrayList<StoreDefinition>();
+            VectorClock oldClock = (VectorClock) originalStoreDefinitions.getVersion();
+
+            // Build a map of store name to the new store definitions
+            for(StoreDefinition def: updatedStores) {
+                updatedStoresMap.put(def.getName(), def);
+            }
+
+            // Iterate through the original store definitions. Replace the old
+            // ones with the ones specified in 'updatedStores'
+            for(StoreDefinition def: originalstoreDefList) {
+                StoreDefinition updatedDef = updatedStoresMap.get(def.getName());
+                if(updatedDef == null) {
+                    finalStoreDefList.add(def);
+                } else {
+                    finalStoreDefList.add(updatedDef);
+                }
+            }
+
+            // Set the new store definition on the given nodeId
+            updateRemoteMetadata(nodeId,
+                                 MetadataStore.STORES_KEY,
+                                 new Versioned<String>(storeMapper.writeStoreList(finalStoreDefList),
+                                                       oldClock.incremented(nodeId, 1)));
+
+        }
+
+        /**
+         * Helper method to fetch the current stores xml list and update the
+         * specified stores. This is done for all the nodes in the current
+         * cluster.
+         * 
+         * @param updatedStores New version of the stores to be updated
+         */
+        public synchronized void fetchAndUpdateRemoteStores(List<StoreDefinition> updatedStores) {
+            for(Integer nodeId: currentCluster.getNodeIds()) {
+                fetchAndUpdateRemoteStore(nodeId, updatedStores);
             }
         }
 
@@ -1600,44 +1694,6 @@ public class AdminClient {
 
             int asyncId = response.getRequestId();
             rpcOps.waitForCompletion(nodeId, asyncId, timeOut, TimeUnit.MINUTES);
-        }
-
-        /**
-         * Reserve memory for the stores
-         * 
-         * @param nodeId The node id to reserve, -1 for entire cluster
-         * @param stores list of stores for which to reserve
-         * @param sizeInMB size of reservation
-         */
-        public void reserveMemory(int nodeId, List<String> stores, long sizeInMB) {
-
-            List<Integer> reserveNodes = new ArrayList<Integer>();
-            if(nodeId == -1) {
-                // if no node is specified send it to the entire cluster
-                for(Node node: currentCluster.getNodes())
-                    reserveNodes.add(node.getId());
-            } else {
-                reserveNodes.add(nodeId);
-            }
-            for(String storeName: stores) {
-                for(Integer reserveNodeId: reserveNodes) {
-
-                    VAdminProto.ReserveMemoryRequest reserveRequest = VAdminProto.ReserveMemoryRequest.newBuilder()
-                                                                                                      .setStoreName(storeName)
-                                                                                                      .setSizeInMb(sizeInMB)
-                                                                                                      .build();
-                    VAdminProto.VoldemortAdminRequest adminRequest = VAdminProto.VoldemortAdminRequest.newBuilder()
-                                                                                                      .setReserveMemory(reserveRequest)
-                                                                                                      .setType(VAdminProto.AdminRequestType.RESERVE_MEMORY)
-                                                                                                      .build();
-                    VAdminProto.ReserveMemoryResponse.Builder response = rpcOps.sendAndReceive(reserveNodeId,
-                                                                                               adminRequest,
-                                                                                               VAdminProto.ReserveMemoryResponse.newBuilder());
-                    if(response.hasError())
-                        helperOps.throwException(response.getError());
-                }
-                logger.info("Finished reserving memory for store : " + storeName);
-            }
         }
     }
 
@@ -2717,7 +2773,7 @@ public class AdminClient {
          * 
          * @param nodeId Stealer node id
          * @param cluster Cluster information which we need to update
-         * @param rebalancePartitionPlanList The list of rebalance partition
+         * @param rebalanceTaskPlanList The list of rebalance partition
          *        info plans
          * @param swapRO Boolean indicating if we need to swap RO stores
          * @param changeClusterMetadata Boolean indicating if we need to change
@@ -3563,6 +3619,73 @@ public class AdminClient {
                 socketPool.checkin(destination, sands);
             }
 
+        }
+    }
+
+    public class QuotaManagementOperations {
+
+        public void setQuota(String storeName, String quotaType, String quotaValue) {
+            // FIXME This is a temporary workaround for System store client not
+            // being able to do a second insert. We simply generate a super
+            // clock that will trump what is on storage
+            VectorClock denseClock = VectorClockUtils.makeClock(currentCluster.getNodeIds(),
+                                                                System.currentTimeMillis(),
+                                                                System.currentTimeMillis());
+            quotaSysStoreClient.putSysStore(QuotaUtils.makeQuotaKey(storeName,
+                                                                    QuotaType.valueOf(quotaType)),
+                                            new Versioned<String>(quotaValue, denseClock));
+            logger.info("Set quota " + quotaType + " to " + quotaValue + " for store " + storeName);
+        }
+
+        public void unsetQuota(String storeName, String quotaType) {
+            quotaSysStoreClient.deleteSysStore(QuotaUtils.makeQuotaKey(storeName,
+                                                                       QuotaType.valueOf(quotaType)));
+            logger.info("Unset quota " + quotaType + " for store " + storeName);
+        }
+
+        public Versioned<String> getQuota(String storeName, String quotaType) {
+            return quotaSysStoreClient.getSysStore(QuotaUtils.makeQuotaKey(storeName,
+                                                                           QuotaType.valueOf(quotaType)));
+        }
+
+        /**
+         * Reserve memory for the stores
+         * 
+         * TODO this should also now use the voldsys$_quotas system store
+         * 
+         * @param nodeId The node id to reserve, -1 for entire cluster
+         * @param stores list of stores for which to reserve
+         * @param sizeInMB size of reservation
+         */
+        public void reserveMemory(int nodeId, List<String> stores, long sizeInMB) {
+
+            List<Integer> reserveNodes = new ArrayList<Integer>();
+            if(nodeId == -1) {
+                // if no node is specified send it to the entire cluster
+                for(Node node: currentCluster.getNodes())
+                    reserveNodes.add(node.getId());
+            } else {
+                reserveNodes.add(nodeId);
+            }
+            for(String storeName: stores) {
+                for(Integer reserveNodeId: reserveNodes) {
+
+                    VAdminProto.ReserveMemoryRequest reserveRequest = VAdminProto.ReserveMemoryRequest.newBuilder()
+                                                                                                      .setStoreName(storeName)
+                                                                                                      .setSizeInMb(sizeInMB)
+                                                                                                      .build();
+                    VAdminProto.VoldemortAdminRequest adminRequest = VAdminProto.VoldemortAdminRequest.newBuilder()
+                                                                                                      .setReserveMemory(reserveRequest)
+                                                                                                      .setType(VAdminProto.AdminRequestType.RESERVE_MEMORY)
+                                                                                                      .build();
+                    VAdminProto.ReserveMemoryResponse.Builder response = rpcOps.sendAndReceive(reserveNodeId,
+                                                                                               adminRequest,
+                                                                                               VAdminProto.ReserveMemoryResponse.newBuilder());
+                    if(response.hasError())
+                        helperOps.throwException(response.getError());
+                }
+                logger.info("Finished reserving memory for store : " + storeName);
+            }
         }
     }
 }

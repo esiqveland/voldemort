@@ -121,7 +121,7 @@ public class R2Store extends AbstractStore<ByteArray, byte[], byte[]> {
                    RESTClientConfig config) {
         this(storeName, restBootstrapURL, null, null, d2Client, config, INVALID_ZONE_ID);
     }
-    
+
     public R2Store(String storeName,
                    String restBootstrapURL,
                    String routingCodeStr,
@@ -130,7 +130,7 @@ public class R2Store extends AbstractStore<ByteArray, byte[], byte[]> {
                    RESTClientConfig config,
                    int zoneId) {
         super(storeName);
-        if (transportClient == null) {
+        if(transportClient == null) {
             this.client = d2Client;
         } else {
             this.client = new TransportClientAdapter(transportClient);
@@ -142,7 +142,6 @@ public class R2Store extends AbstractStore<ByteArray, byte[], byte[]> {
         this.zoneId = zoneId;
         this.isActive = new AtomicBoolean(true);
     }
-
 
     @Override
     public void close() throws VoldemortException {
@@ -173,8 +172,8 @@ public class R2Store extends AbstractStore<ByteArray, byte[], byte[]> {
         try {
             // Create the REST request with this byte array
             String base64Key = RestUtils.encodeVoldemortKey(key.get());
-            RestRequestBuilder rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/" + getName()
-                                                                   + "/" + base64Key));
+            RestRequestBuilder rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/"
+                                                                   + getName() + "/" + base64Key));
             // Create a HTTP POST request
             rb.setMethod(DELETE);
             rb.setHeader(CONTENT_LENGTH, "0");
@@ -268,7 +267,8 @@ public class R2Store extends AbstractStore<ByteArray, byte[], byte[]> {
         String base64Key = RestUtils.encodeVoldemortKey(key.get());
         RestRequestBuilder rb = null;
         try {
-            rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/" + getName() + "/" + base64Key));
+            rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/" + getName() + "/"
+                                                + base64Key));
             String timeoutStr = Long.toString(this.config.getTimeoutConfig()
                                                          .getOperationTimeout(VoldemortOpCode.GET_OP_CODE));
             rb.setHeader("Accept", MULTIPART_CONTENT_TYPE);
@@ -359,8 +359,8 @@ public class R2Store extends AbstractStore<ByteArray, byte[], byte[]> {
         RestRequestBuilder rb = null;
         try {
             String base64Key = new String(Base64.encodeBase64(getName().getBytes("UTF-8")));
-            rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/" + SCHEMATA_STORE_NAME + "/"
-                                                + base64Key));
+            rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/" + SCHEMATA_STORE_NAME
+                                                + "/" + base64Key));
             rb.setHeader("Accept", "binary");
             rb.setHeader(RestMessageHeaders.X_VOLD_REQUEST_ORIGIN_TIME_MS,
                          String.valueOf(System.currentTimeMillis()));
@@ -407,8 +407,8 @@ public class R2Store extends AbstractStore<ByteArray, byte[], byte[]> {
 
             // Create the REST request with this byte array
             String base64Key = RestUtils.encodeVoldemortKey(key.get());
-            RestRequestBuilder rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/" + getName()
-                                                                   + "/" + base64Key));
+            RestRequestBuilder rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/"
+                                                                   + getName() + "/" + base64Key));
 
             // Create a HTTP POST request
             rb.setMethod(POST);
@@ -499,65 +499,86 @@ public class R2Store extends AbstractStore<ByteArray, byte[], byte[]> {
 
     @Override
     public Map<ByteArray, List<Versioned<byte[]>>> getAll(Iterable<ByteArray> keys,
-                                                          Map<ByteArray, byte[]> tranforms)
+                                                          Map<ByteArray, byte[]> transforms)
             throws VoldemortException {
 
         Map<ByteArray, List<Versioned<byte[]>>> resultMap = new HashMap<ByteArray, List<Versioned<byte[]>>>();
+        int numberOfKeys = 0;
 
         try {
             Iterator<ByteArray> it = keys.iterator();
-            String keyArgs = null;
+            StringBuilder keyArgs = null;
 
             while(it.hasNext()) {
                 ByteArray key = it.next();
                 String base64Key = RestUtils.encodeVoldemortKey(key.get());
                 if(keyArgs == null) {
-                    keyArgs = base64Key;
+                    keyArgs = new StringBuilder();
+                    keyArgs.append(base64Key);
                 } else {
-                    keyArgs += "," + base64Key;
+                    keyArgs.append("," + base64Key);
                 }
+                numberOfKeys++;
             }
 
-            RestRequestBuilder rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/" + getName()
-                                                                   + "/" + keyArgs));
+            // Rerouting getall() requests with single key to get(). This is a
+            // temporary fix to handle the NPE when getAll requests are made
+            // with single key.
+            // TODO a common way to handle getAll with any number of keys
+            if(numberOfKeys == 1) {
+                List<Versioned<byte[]>> resultList = new ArrayList<Versioned<byte[]>>();
+                it = keys.iterator();
+                ByteArray key = it.next();
+                byte[] singleKeyTransforms = null;
+                if(transforms != null) {
+                    singleKeyTransforms = transforms.get(key);
+                }
+                resultList = this.get(key, singleKeyTransforms);
+                resultMap.put(key, resultList);
+            } else {
 
-            rb.setMethod(GET);
-            rb.setHeader("Accept", MULTIPART_CONTENT_TYPE);
-            String timeoutStr = Long.toString(this.config.getTimeoutConfig()
-                                                         .getOperationTimeout(VoldemortOpCode.GET_ALL_OP_CODE));
-            rb.setHeader(RestMessageHeaders.X_VOLD_REQUEST_TIMEOUT_MS, timeoutStr);
-            rb.setHeader(RestMessageHeaders.X_VOLD_REQUEST_ORIGIN_TIME_MS,
-                         String.valueOf(System.currentTimeMillis()));
-            if(this.routingTypeCode != null) {
-                rb.setHeader(RestMessageHeaders.X_VOLD_ROUTING_TYPE_CODE, this.routingTypeCode);
-            }
-            if(this.zoneId != INVALID_ZONE_ID) {
-                rb.setHeader(RestMessageHeaders.X_VOLD_ZONE_ID, String.valueOf(this.zoneId));
-            }
+                RestRequestBuilder rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/"
+                                                                       + getName() + "/"
+                                                                       + keyArgs.toString()));
 
-            RestRequest request = rb.build();
-            Future<RestResponse> f = client.restRequest(request);
+                rb.setMethod(GET);
+                rb.setHeader("Accept", MULTIPART_CONTENT_TYPE);
+                String timeoutStr = Long.toString(this.config.getTimeoutConfig()
+                                                             .getOperationTimeout(VoldemortOpCode.GET_ALL_OP_CODE));
+                rb.setHeader(RestMessageHeaders.X_VOLD_REQUEST_TIMEOUT_MS, timeoutStr);
+                rb.setHeader(RestMessageHeaders.X_VOLD_REQUEST_ORIGIN_TIME_MS,
+                             String.valueOf(System.currentTimeMillis()));
+                if(this.routingTypeCode != null) {
+                    rb.setHeader(RestMessageHeaders.X_VOLD_ROUTING_TYPE_CODE, this.routingTypeCode);
+                }
+                if(this.zoneId != INVALID_ZONE_ID) {
+                    rb.setHeader(RestMessageHeaders.X_VOLD_ZONE_ID, String.valueOf(this.zoneId));
+                }
 
-            // This will block
-            RestResponse response = f.get();
+                RestRequest request = rb.build();
+                Future<RestResponse> f = client.restRequest(request);
 
-            // Parse the response
-            final ByteString entity = response.getEntity();
+                // This will block
+                RestResponse response = f.get();
 
-            String contentType = response.getHeader(CONTENT_TYPE);
-            if(entity != null) {
-                if(contentType.equalsIgnoreCase(MULTIPART_CONTENT_TYPE)) {
+                // Parse the response
+                final ByteString entity = response.getEntity();
 
-                    resultMap = parseGetAllResults(entity);
+                String contentType = response.getHeader(CONTENT_TYPE);
+                if(entity != null) {
+                    if(contentType.equalsIgnoreCase(MULTIPART_CONTENT_TYPE)) {
+
+                        resultMap = parseGetAllResults(entity);
+                    } else {
+                        if(logger.isDebugEnabled()) {
+                            logger.debug("Did not receive a multipart response");
+                        }
+                    }
+
                 } else {
                     if(logger.isDebugEnabled()) {
-                        logger.debug("Did not receive a multipart response");
+                        logger.debug("Did not get any response!");
                     }
-                }
-
-            } else {
-                if(logger.isDebugEnabled()) {
-                    logger.debug("Did not get any response!");
                 }
             }
         } catch(ExecutionException e) {
@@ -669,7 +690,8 @@ public class R2Store extends AbstractStore<ByteArray, byte[], byte[]> {
         String base64Key = RestUtils.encodeVoldemortKey(key.get());
         RestRequestBuilder rb = null;
         try {
-            rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/" + getName() + "/" + base64Key));
+            rb = new RestRequestBuilder(new URI(this.restBootstrapURL + "/" + getName() + "/"
+                                                + base64Key));
             String timeoutStr = Long.toString(this.config.getTimeoutConfig()
                                                          .getOperationTimeout(VoldemortOpCode.GET_VERSION_OP_CODE));
 

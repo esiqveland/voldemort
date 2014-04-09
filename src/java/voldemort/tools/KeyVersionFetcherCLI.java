@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package voldemort.utils;
+package voldemort.tools;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -51,6 +51,9 @@ import voldemort.client.protocol.admin.AdminClientConfig;
 import voldemort.cluster.Cluster;
 import voldemort.routing.BaseStoreRoutingPlan;
 import voldemort.store.StoreDefinition;
+import voldemort.utils.ByteUtils;
+import voldemort.utils.Utils;
+import voldemort.utils.ByteArray;
 import voldemort.versioning.Version;
 import voldemort.versioning.Versioned;
 
@@ -258,6 +261,7 @@ public class KeyVersionFetcherCLI {
                 StringBuilder sb = new StringBuilder();
                 sb.append(ByteUtils.toHexString(key));
                 for(Versioned<byte[]> value: values) {
+                    // TODO : This needs to be fixed for RO stores
                     Version version = value.getVersion();
                     sb.append(" : ").append(version.toString());
                 }
