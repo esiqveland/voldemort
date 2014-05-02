@@ -48,7 +48,7 @@ import com.google.common.collect.Lists;
  * was shut down and the box was restarted
  * 
  */
-public class RebalancerZooKeeper implements Runnable {
+public class RebalancerZooKeeper extends Rebalancer implements Runnable {
 
     private final static Logger logger = Logger.getLogger(Rebalancer.class);
 
@@ -58,54 +58,15 @@ public class RebalancerZooKeeper implements Runnable {
     private final StoreRepository storeRepository;
     private final Set<Integer> rebalancePermits = Collections.synchronizedSet(new HashSet<Integer>());
 
-    public Rebalancer(StoreRepository storeRepository,
+    public RebalancerZooKeeper(StoreRepository storeRepository,
                       MetadataStore metadataStore,
                       VoldemortConfig voldemortConfig,
                       AsyncOperationService asyncService) {
+        super(storeRepository, metadataStore, voldemortConfig, asyncService);
         this.storeRepository = storeRepository;
         this.metadataStore = metadataStore;
         this.asyncService = asyncService;
         this.voldemortConfig = voldemortConfig;
-    }
-
-    public AsyncOperationService getAsyncOperationService() {
-        return asyncService;
-    }
-
-    public void start() {}
-
-    public void stop() {}
-
-    /**
-     * This is called only once at startup
-     */
-    public void run() {}
-
-    /**
-     * Acquire a permit for a particular node id so as to allow rebalancing
-     * 
-     * @param nodeId The id of the node for which we are acquiring a permit
-     * @return Returns true if permit acquired, false if the permit is already
-     *         held by someone
-     */
-    public synchronized boolean acquireRebalancingPermit(int nodeId) {
-        boolean added = rebalancePermits.add(nodeId);
-        logger.info("Acquiring rebalancing permit for node id " + nodeId + ", returned: " + added);
-
-        return added;
-    }
-
-    /**
-     * Release the rebalancing permit for a particular node id
-     * 
-     * @param nodeId The node id whose permit we want to release
-     */
-    public synchronized void releaseRebalancingPermit(int nodeId) {
-        boolean removed = rebalancePermits.remove(nodeId);
-        logger.info("Releasing rebalancing permit for node id " + nodeId + ", returned: " + removed);
-        if(!removed)
-            throw new VoldemortException(new IllegalStateException("Invalid state, must hold a "
-                                                                   + "permit to release"));
     }
 
     /**

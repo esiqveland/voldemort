@@ -70,17 +70,21 @@ public class Headmaster implements Runnable, ZKDataListener {
 
     }
 
-   private Headmaster(String zkURL) {
-        this.zkURL = zkURL;
-        currentClusterLock = new ReentrantLock();
-        handledNodes = new ConcurrentHashMap<>();
-        try {
+    public Headmaster(String zkURL, ActiveNodeZKListener activeNodeZKListener) {
+        this(zkURL);
+        this.anzkl = activeNodeZKListener;
+        this.anzkl.addDataListener(this);
+    }
+
+    private Headmaster(String zkURL) {
+       this.zkURL = zkURL;
+       currentClusterLock = new ReentrantLock();
+       handledNodes = new ConcurrentHashMap<>();
+       try {
             myHostname = InetAddress.getLocalHost().getCanonicalHostName().toString();
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
-        this.anzkl = activeNodeZKListener;
-        this.anzkl.addDataListener(this);
     }
 
     private void beHeadmaster() {
@@ -196,26 +200,6 @@ public class Headmaster implements Runnable, ZKDataListener {
                 rebalance();
             }
         }
-    }
-
-
-    public static void main(String args[]) {
-
-        String url = defaultUrl;
-        if (args.length == 0) {
-            System.out.println(
-                    String.format(
-                            "usage: %s [zookeeperurl]\nDefaults to %s", Headmaster.class.getCanonicalName(), defaultUrl));
-        } else {
-            url = args[0];
-        }
-
-        ActiveNodeZKListener activeNodeZKListener = new ActiveNodeZKListener(url);
-
-        Headmaster headmaster = new Headmaster(url, activeNodeZKListener);
-
-        Thread worker = new Thread(headmaster);
-        worker.start();
     }
 
     private Node locateNewChildAndHandOutId(String child){
