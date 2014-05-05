@@ -24,6 +24,8 @@ public class VoldemortLoadTester implements Runnable {
     StoreClient<String, String> client;
     String bootstrapUrl;
 
+
+    String prefix;
     String operation;
 
     final int newFixedThreadPool = 200;
@@ -35,6 +37,8 @@ public class VoldemortLoadTester implements Runnable {
 
         String operation = "PUT";
 
+        String prefix = "knut";
+
         String url = "tcp://127.0.0.1:6666";
         if (args.length >= 1) {
             url = args[0];
@@ -44,18 +48,23 @@ public class VoldemortLoadTester implements Runnable {
             operation = args[1];
         }
 
-        VoldemortLoadTester loadGeneratorExample = new VoldemortLoadTester(url,  operation);
+        if(args.length >= 3) {
+            prefix = args[2];
+        }
+
+        VoldemortLoadTester loadGeneratorExample = new VoldemortLoadTester(url,  operation, prefix);
 
         Thread t = new Thread(loadGeneratorExample);
         t.start();
 
     }
 
-    public VoldemortLoadTester(String url, String operation) {
+    public VoldemortLoadTester(String url, String operation, String prefix) {
         logger.info("Staring {} on url: {}", operation, url);
 
         this.operation = operation;
         this.bootstrapUrl = url;
+        this.prefix = prefix;
 
         StoreClientFactory factory = new SocketStoreClientFactory(new ClientConfig().setBootstrapUrls(bootstrapUrl));
         this.client = factory.getStoreClient("test");
@@ -74,13 +83,13 @@ public class VoldemortLoadTester implements Runnable {
         switch (operation) {
             case "GET":
                 for (int i = 0; i < numberOfGets; i++) {
-                    Future future = executorService.submit(new GetJob(client, "knut" + String.valueOf(i), "toto" + String.valueOf(i)));
+                    Future future = executorService.submit(new GetJob(client, prefix + String.valueOf(i), "toto" + String.valueOf(i)));
                     futures.add(future);
                 }
                 break;
             case "PUT":
                 for (int i = 0; i < numberOfPuts; i++) {
-                    Future future = executorService.submit(new PutJob(client, "knut" + String.valueOf(i), "toto" + String.valueOf(i)));
+                    Future future = executorService.submit(new PutJob(client, prefix + String.valueOf(i), "toto" + String.valueOf(i)));
                     futures.add(future);
                 }
                 break;
