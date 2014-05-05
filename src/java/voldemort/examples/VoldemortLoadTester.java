@@ -7,6 +7,7 @@ import voldemort.client.ClientConfig;
 import voldemort.client.SocketStoreClientFactory;
 import voldemort.client.StoreClient;
 import voldemort.client.StoreClientFactory;
+import voldemort.versioning.Version;
 import voldemort.versioning.Versioned;
 
 import java.util.List;
@@ -23,28 +24,37 @@ public class VoldemortLoadTester implements Runnable {
     StoreClient<String, String> client;
     String bootstrapUrl;
 
-    final int newFixedThreadPool = 100;
-    final int numberOfPuts = 100000;
-    final int numberOfGets = 1000;
+    String operation;
+
+    final int newFixedThreadPool = 200;
+    final int numberOfPuts = 1000000;
+    final int numberOfGets = 1000000;
 
 
     public static void main(String[] args) {
 
+        String operation = "PUT";
+
         String url = "tcp://127.0.0.1:6666";
-        if(args.length >= 1) {
+        if (args.length >= 1) {
             url = args[0];
         }
 
-        VoldemortLoadTester loadGeneratorExample = new VoldemortLoadTester(url);
+        if (args.length >= 2) {
+            operation = args[1];
+        }
+
+        VoldemortLoadTester loadGeneratorExample = new VoldemortLoadTester(url,  operation);
 
         Thread t = new Thread(loadGeneratorExample);
         t.start();
 
     }
 
-    public VoldemortLoadTester(String url) {
-        logger.info("Staring on url: {}", url);
+    public VoldemortLoadTester(String url, String operation) {
+        logger.info("Staring {} on url: {}", operation, url);
 
+        this.operation = operation;
         this.bootstrapUrl = url;
 
         StoreClientFactory factory = new SocketStoreClientFactory(new ClientConfig().setBootstrapUrls(bootstrapUrl));
@@ -60,17 +70,28 @@ public class VoldemortLoadTester implements Runnable {
         long startTime = System.currentTimeMillis();
 
         List<Future> futures = Lists.newLinkedList();
-        for (int i = 0; i < numberOfPuts; i++) {
-            Future future = executorService.submit(new PutJob(client, "knut" + String.valueOf(i), "toto" + String.valueOf(i)));
-            futures.add(future);
-        }
 
-//        for (int i = 0; i < numberOfGets; i++) {
-//            version = client.get("knut" + i);
-//        }
+        switch (operation) {
+            case "GET":
+                for (int i = 0; i < numberOfGets; i++) {
+                    Future future = executorService.submit(new GetJob(client, "knut" + String.valueOf(i), "toto" + String.valueOf(i)));
+                    futures.add(future);
+                }
+                break;
+            case "PUT":
+                for (int i = 0; i < numberOfPuts; i++) {
+                    Future future = executorService.submit(new PutJob(client, "knut" + String.valueOf(i), "toto" + String.valueOf(i)));
+                    futures.add(future);
+                }
+                break;
+            default:
+                logger.error("Unsupported operation: {}", operation);
+
+        }
 
         // dont take any more new tasks
         executorService.shutdown();
+
         try {
             for (Future f : futures) {
                 f.get();
@@ -83,6 +104,38 @@ public class VoldemortLoadTester implements Runnable {
         long stopTime = System.currentTimeMillis();
         System.out.println("Time to put " + numberOfPuts + " values: " + (stopTime - startTime)
                 + "ms");
+
+    }
+
+    class GetJob implements Runnable {
+        Logger logger = LoggerFactory.getLogger(GetJob.class);
+
+        StoreClient<String, String> client;
+        String key;
+        String value;
+
+        public GetJob(StoreClient<String, String> client, String key, String value) {
+            this.key = key;
+            this.value = value;
+            this.client = client;
+        }
+
+        @Override
+        public void run() {
+            Long before = System.currentTimeMillis();
+
+            Versioned<String> returnVersion;
+            try {
+
+                returnVersion = client.get(key);
+
+                Long after = System.currentTimeMillis();
+                logger.debug("Get {} {}ms", key, after - before);
+
+            } catch (Exception e) {
+                logger.error("Put failed: key: {} e: {}", key, e);
+            }
+        }
 
     }
 
@@ -108,13 +161,16 @@ public class VoldemortLoadTester implements Runnable {
 
             Long before = System.currentTimeMillis();
             try {
-                returnVersion = client.get(key);
-                if (returnVersion == null) {
-                    version.setObject(value);
-                } else {
-                    returnVersion.setObject(value);
-                }
-                client.put(key, version);
+
+//                returnVersion = client.get(key);
+//                if (returnVersion == null) {
+//                    version.setObject(value);
+//                } else {
+//                    returnVersion.setObject(value);
+//                }
+//                client.put(key, version);
+
+                client.put(key, value);
                 success = true;
             } catch (Exception e) {
                 logger.error("Put failed: key: {} e: {}", key, e);
