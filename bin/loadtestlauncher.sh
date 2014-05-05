@@ -41,6 +41,7 @@ fi
 # add '-Dlog4j.debug ' to debug log4j issues.
 LOG4JPROPERTIES="-Dlog4j.configuration=file://${base_dir}/src/java/log4j.loadtester.properties"
 
+echo "LOG4J:$LOG4JPROPERTIES"
 export CLASSPATH
 java $LOG4JPROPERTIES $VOLD_OPTS -cp $CLASSPATH voldemort.examples.VoldemortLoadTester $@
 

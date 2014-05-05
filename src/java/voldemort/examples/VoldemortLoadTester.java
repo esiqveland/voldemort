@@ -31,8 +31,8 @@ public class VoldemortLoadTester implements Runnable {
     public static void main(String[] args) {
 
         String url = "tcp://127.0.0.1:6666";
-        if(args.length > 1) {
-            url = args[1];
+        if(args.length >= 1) {
+            url = args[0];
         }
 
         VoldemortLoadTester loadGeneratorExample = new VoldemortLoadTester(url);
@@ -107,15 +107,17 @@ public class VoldemortLoadTester implements Runnable {
             boolean success = false;
 
             Long before = System.currentTimeMillis();
-            returnVersion = client.get(key);
-            if (returnVersion == null) {
-                version.setObject(value);
+            try {
+                returnVersion = client.get(key);
+                if (returnVersion == null) {
+                    version.setObject(value);
+                } else {
+                    returnVersion.setObject(value);
+                }
                 client.put(key, version);
                 success = true;
-            } else {
-                returnVersion.setObject(value);
-                client.put(key, returnVersion);
-                success = true;
+            } catch (Exception e) {
+                logger.error("Put failed: key: {} e: {}", key, e);
             }
             Long after = System.currentTimeMillis();
 
