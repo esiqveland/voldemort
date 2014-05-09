@@ -1,6 +1,7 @@
 package voldemort.examples;
 
 import com.google.common.collect.Lists;
+import org.apache.commons.lang.RandomStringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import voldemort.client.ClientConfig;
@@ -28,9 +29,12 @@ public class VoldemortLoadTester implements Runnable {
     String prefix;
     String operation;
 
-    final int newFixedThreadPool = 200;
-    final int numberOfPuts = 1000000;
-    final int numberOfGets = 1000000;
+    final int STRINGSIZE = 1024 / 3;
+
+    final int newFixedThreadPool = 10;
+    final int numOps = 100000;
+    final int numberOfPuts = numOps;
+    final int numberOfGets = numOps;
 
 
     public static void main(String[] args) {
@@ -48,11 +52,11 @@ public class VoldemortLoadTester implements Runnable {
             operation = args[1];
         }
 
-        if(args.length >= 3) {
+        if (args.length >= 3) {
             prefix = args[2];
         }
 
-        VoldemortLoadTester loadGeneratorExample = new VoldemortLoadTester(url,  operation, prefix);
+        VoldemortLoadTester loadGeneratorExample = new VoldemortLoadTester(url, operation, prefix);
 
         Thread t = new Thread(loadGeneratorExample);
         t.start();
@@ -67,7 +71,7 @@ public class VoldemortLoadTester implements Runnable {
         this.prefix = prefix;
 
         StoreClientFactory factory = new SocketStoreClientFactory(new ClientConfig().setBootstrapUrls(bootstrapUrl));
-        this.client = factory.getStoreClient("test");
+        this.client = factory.getStoreClient("usertable");
 
         this.executorService = Executors.newFixedThreadPool(newFixedThreadPool);
 
@@ -80,16 +84,21 @@ public class VoldemortLoadTester implements Runnable {
 
         List<Future> futures = Lists.newLinkedList();
 
+        String data = RandomStringUtils.random(STRINGSIZE);
+        logger.info("Random string size (bytes): {}", data.getBytes().length);
+
         switch (operation) {
             case "GET":
                 for (int i = 0; i < numberOfGets; i++) {
-                    Future future = executorService.submit(new GetJob(client, prefix + String.valueOf(i), "toto" + String.valueOf(i)));
+                    Future future = executorService.submit(new GetJob(client, prefix + String.valueOf(i)));
                     futures.add(future);
                 }
                 break;
             case "PUT":
+                data = RandomStringUtils.random(STRINGSIZE);
+
                 for (int i = 0; i < numberOfPuts; i++) {
-                    Future future = executorService.submit(new PutJob(client, prefix + String.valueOf(i), "toto" + String.valueOf(i)));
+                    Future future = executorService.submit(new PutJob(client, prefix + String.valueOf(i), data));
                     futures.add(future);
                 }
                 break;
@@ -111,7 +120,7 @@ public class VoldemortLoadTester implements Runnable {
             e.printStackTrace();
         }
         long stopTime = System.currentTimeMillis();
-        System.out.println("Time to put " + numberOfPuts + " values: " + (stopTime - startTime)
+        System.out.println("Time to "+ operation + " " + numOps + " values: " + (stopTime - startTime)
                 + "ms");
 
     }
@@ -121,11 +130,9 @@ public class VoldemortLoadTester implements Runnable {
 
         StoreClient<String, String> client;
         String key;
-        String value;
 
-        public GetJob(StoreClient<String, String> client, String key, String value) {
+        public GetJob(StoreClient<String, String> client, String key) {
             this.key = key;
-            this.value = value;
             this.client = client;
         }
 
@@ -142,7 +149,7 @@ public class VoldemortLoadTester implements Runnable {
                 logger.debug("Get {} {}ms", key, after - before);
 
             } catch (Exception e) {
-                logger.error("Put failed: key: {} e: {}", key, e);
+                logger.error("Get failed: key: {} e: {}", key, e);
             }
         }
 
@@ -171,14 +178,6 @@ public class VoldemortLoadTester implements Runnable {
             Long before = System.currentTimeMillis();
             try {
 
-//                returnVersion = client.get(key);
-//                if (returnVersion == null) {
-//                    version.setObject(value);
-//                } else {
-//                    returnVersion.setObject(value);
-//                }
-//                client.put(key, version);
-
                 client.put(key, value);
                 success = true;
             } catch (Exception e) {
@@ -187,7 +186,7 @@ public class VoldemortLoadTester implements Runnable {
             Long after = System.currentTimeMillis();
 
             Long duration = after - before;
-            if(success) {
+            if (success) {
                 logger.debug("Put {} {}ms", key, duration);
             } else {
                 logger.debug("Put failed: {}", key);
