@@ -16,9 +16,9 @@
 #  limitations under the License.
 #
 
-if [ $# -gt 2 ];
+if [ $# -gt 3 ];
 then
-	echo 'USAGE: bin/voldemort-server.sh [voldemort_home] [voldemort_config_dir]'
+	echo 'USAGE: bin/voldemort-server.sh  [voldemort_home_dir] [voldemort_config_dir] [zookeeperurl: zk:host:port/chroot]'
 	exit 1
 fi
 

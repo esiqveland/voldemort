@@ -42,7 +42,7 @@ public class Headmaster implements Runnable, ZKDataListener {
 
     public static final String ACTIVEPATH = "/active";
 
-    public static final String defaultUrl = "voldemort1.idi.ntnu.no:2181/voldemortntnu";
+    public static final String defaultUrl = "voldemort1.idi.ntnu.no:2181/hjemmekontor";
     public static final String bootStrapUrl = "tcp://voldemort1.idi.ntnu.no:6667";
 
     private String myHostname;

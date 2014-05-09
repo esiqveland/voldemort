@@ -7,7 +7,7 @@ import subprocess
 import fileinput
 import time
 
-prosjektdir = "/home/king/src/masteroppgave/voldemort"
+prosjektdir = "/home/king/src/voldemort"
 hostname = socket.gethostname()
 
 node_number = hostname[-1]
