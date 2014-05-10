@@ -63,6 +63,10 @@ public class ActiveNodeZKListener implements Watcher {
                 handleStateChange(event);
                 break;
 
+            case NodeCreated:
+                handleNodeDataChanged(event);
+                break;
+
             case NodeDataChanged:
                 handleNodeDataChanged(event);
                 break;
@@ -90,7 +94,7 @@ public class ActiveNodeZKListener implements Watcher {
     }
 
     private void handleNodeDataChanged(WatchedEvent event) {
-        logger.debug("nodeData changed: " + event);
+        logger.debug("nodeData changed/nodeCreated: " + event);
         for(ZKDataListener zkd : zkDataListeners) {
             zkd.dataChanged(event.getPath());
         }

@@ -70,9 +70,9 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements ZKDataL
             try {
                 this.zk.exists("/config/nodes/" + this.hostname + "/server.properties", true);
             } catch (KeeperException e1) {
-                e1.printStackTrace();
+                logger.error(e1);
             } catch (InterruptedException e1) {
-                e1.printStackTrace();
+                logger.error(e1);
             }
 
         } finally {
@@ -179,10 +179,6 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements ZKDataL
             zk = null;
         }
 
-        if(!isReady()) {
-            tryToReadConfig();
-        }
-
     }
 
     public String getNodeConfigFromZooKeeper(ZooKeeper zk) throws VoldemortException {
@@ -226,7 +222,9 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements ZKDataL
 
     @Override
     public void dataChanged(String path) {
-
+        if(!isReady()) {
+            tryToReadConfig();
+        }
     }
 
     @Override
