@@ -59,14 +59,12 @@ public class ZooKeeperStorageEngine extends AbstractStorageEngine<String, String
     private String configdir;
     private String zkconfigdir = "/config";
     private Watcher watcher;
-    private MetadataStore metadatastore;
 
     public ZooKeeperStorageEngine(String name, String configDir, VoldemortZooKeeperConfig vc) {
         super(name);
         this.watcher = vc;
         this.configdir = configDir;
         this.voldemortZooKeeperConfig = vc;
-        metadatastore = null;
     }
 
     @Override
@@ -248,7 +246,4 @@ public class ZooKeeperStorageEngine extends AbstractStorageEngine<String, String
         throw new UnsupportedOperationException("Partition based key scan not supported for this storage type");
     }
 
-    public void setMetadatastore(MetadataStore metadatastore) {
-        this.metadatastore = metadatastore;
-    }
 }
