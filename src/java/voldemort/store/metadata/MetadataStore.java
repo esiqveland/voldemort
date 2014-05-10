@@ -138,7 +138,6 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
 
         if(innerStore instanceof ZooKeeperStorageEngine) {
             ((ZooKeeperStorageEngine)innerStore).setWatcher(this);
-            ((ZooKeeperStorageEngine)innerStore).setMetadatastore(this);
         }
 
         this.innerStore = innerStore;

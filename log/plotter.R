@@ -6,15 +6,23 @@ responsetime = mydata$responsetime
 
 mymean = mean(responsetime)
 
+par(xlog=FALSE)
 Fn = ecdf(responsetime)
-par(xlog=TRUE)
+
+summary(responsetime)
 
 #plot(Fn, main="Response times", xlab="response time (ms)", ylab="cumulative response proportion", xlim=c(1,500), log="x")
 plot(Fn, main="Response times", xlab="response time (ms)", ylab="cumulative response proportion", xlim=c(1,500), log="x")
 
 library(Hmisc)
-g <- c( rep('Response Time (ms)',length(responsetime) ) )
+g <- c( rep('Response Time (ms)',length(responsetime)) )
 
-Ecdf(responsetime, main="Response time distribution", xlab='Response Time ms (log scale)',
-	ylab = "percentile of requests", 
-	q=c(.50,.90,.999), log="x")
+Ecdf(responsetime, group=g, 
+	main="Response time distribution", 
+	xlab='Response Time ms ',
+	ylab = "percentile of requests",
+	datadensity="none", 
+	#log="x",
+	q=c(.50,.90,.99,.999),
+	xlim=range(0,5)
+	)

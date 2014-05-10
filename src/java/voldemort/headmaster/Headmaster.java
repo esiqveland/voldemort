@@ -228,10 +228,11 @@ public class Headmaster implements Runnable, ZKDataListener {
         if(!isHeadmaster())
             return;
 
-        if(!path.equals("/active/")){
+        if(!path.startsWith("/active")){
             //This message is for someone else
             return;
         }
+
 
         currentClusterLock.lock();
         try {

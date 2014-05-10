@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.data.Stat;
+import org.hyperic.sigar.cmd.Watch;
 import voldemort.tools.ZKDataListener;
 import voldemort.utils.ConfigurationException;
 
@@ -27,6 +28,12 @@ public class ActiveNodeZKListener implements Watcher {
     private Map<String, ZKDataListener> watches;
 
     /**
+     *  A list of watchers that need all raw events.
+     *   Workaround for metadatastore.
+     */
+    private List<Watcher> watcherList;
+
+    /**
      * Watches a znode on a given cluster for children events.
      * Can pass on certain events to given zkDataListeners.
      * @param zkConnectionUrl
@@ -37,6 +44,7 @@ public class ActiveNodeZKListener implements Watcher {
         connected = false;
 
         zkDataListeners = Lists.newLinkedList();
+        watcherList = Lists.newLinkedList();
         watches = new ConcurrentHashMap<>();
 
         this.zkUrl = zkConnectionUrl;
@@ -235,6 +243,12 @@ public class ActiveNodeZKListener implements Watcher {
             throw new RuntimeException(e);
         }
 
+    }
+
+    public void addWatcher(Watcher watcher) {
+        if (!watcherList.contains(watcher)) {
+            watcherList.add(watcher);
+        }
     }
 
     public void setWatch(String path) {

@@ -5,7 +5,9 @@ import org.apache.log4j.Logger;
 import org.apache.zookeeper.*;
 import org.apache.zookeeper.data.Stat;
 import voldemort.VoldemortException;
+import voldemort.headmaster.ActiveNodeZKListener;
 import voldemort.store.configuration.ConfigurationStorageEngine;
+import voldemort.tools.ZKDataListener;
 import voldemort.utils.ConfigurationException;
 import voldemort.utils.Props;
 
@@ -17,11 +19,10 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Properties;
 
-public class VoldemortZooKeeperConfig extends VoldemortConfig implements Watcher {
+public class VoldemortZooKeeperConfig extends VoldemortConfig implements ZKDataListener {
     private final static Logger logger = Logger.getLogger(VoldemortZooKeeperConfig.class);
 
     public final Object readyLock = new Object();
-    private ZooKeeper zk = null;
 
     private boolean isReady = false;
 
@@ -29,18 +30,24 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements Watcher
     private String hostname;
     private String voldemortHome;
     private String voldemortConfigDir;
-    private Watcher watcher;
+
+    private ZooKeeper zk;
+
+    private ActiveNodeZKListener activeNodeZKListener;
+
     public VoldemortZooKeeperConfig(String voldemortHome, String voldemortConfigDir, String zkurl) throws ConfigurationException {
         zkURL = zkurl;
         this.voldemortHome = voldemortHome;
         this.voldemortConfigDir = voldemortConfigDir;
-        this.watcher = this;
         try {
             this.hostname = InetAddress.getLocalHost().getCanonicalHostName().toString();
         } catch (UnknownHostException e) {
             throw new ConfigurationException("Unable to determine hostname of host", e);
         }
-        this.zk = setupZooKeeper(zkurl, this.watcher);
+        activeNodeZKListener = new ActiveNodeZKListener(zkURL);
+        activeNodeZKListener.addDataListener(this);
+
+        zk = activeNodeZKListener.getZooKeeper();
 
         tryToReadConfig();
     }
@@ -94,9 +101,9 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements Watcher
                 zk.setData(path, nodeid.getBytes(), stat.getVersion());
             }
         } catch (KeeperException e) {
-            e.printStackTrace();
+            logger.error(e);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            logger.error(e);
         }
     }
 
@@ -162,20 +169,15 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements Watcher
         return s;
     }
 
-    public ZooKeeper setupZooKeeper(String zkURI, Watcher callback) {
-        ZooKeeper zk = null;
-        try {
-            logger.info("creating a new zookeeper instance");
-            zk = new ZooKeeper(zkURI, 3000, callback);
-        } catch (IOException e) {
-            throw new ConfigurationException("Error setting up ZooKeeper object!", e);
-        }
-        return zk;
-    }
 
     @Override
     public void process(WatchedEvent event) {
         logger.info(String.format("Got event from ZooKeeper: %s", event));
+
+        if (event.getState() == Event.KeeperState.Expired) {
+            // session expired, we are dead and all is gone.
+            zk = null;
+        }
 
         if(!isReady()) {
             tryToReadConfig();
@@ -195,15 +197,16 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements Watcher
     }
 
     public ZooKeeper getZooKeeper() {
-        if (isZooKeeperAlive())
+        if (isZooKeeperAlive()) {
             return this.zk;
-        logger.info("No zookeeper instance found. Starting creating new zookeeper instance");
-        zk = setupZooKeeper(zkURL, this.watcher);
+        } else {
+            logger.info("Asked for ZooKeeper object, but it is dead!");
+        }
         return zk;
     }
+
     public void setWatcher(Watcher watcher) {
-        this.watcher = watcher;
-        this.getZooKeeper().register(watcher);
+        activeNodeZKListener.addWatcher(watcher);
 
         logger.info("Registered " + watcher + " as watcher for ZooKeeper instance.");
     }
@@ -216,4 +219,24 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements Watcher
         return isReady;
     }
 
+    @Override
+    public void childrenList(String path) {
+
+    }
+
+    @Override
+    public void dataChanged(String path) {
+
+    }
+
+    @Override
+    public void nodeDeleted(String path) {
+
+    }
+
+    @Override
+    public void reconnected() {
+        this.zk = activeNodeZKListener.getZooKeeper();
+        registerAliveness();
+    }
 }
