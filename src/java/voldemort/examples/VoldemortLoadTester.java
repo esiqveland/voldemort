@@ -38,10 +38,14 @@ public class VoldemortLoadTester implements Runnable {
 
 
     public static void main(String[] args) {
-
         String operation = "PUT";
 
         String prefix = "knut";
+
+        if(args.length == 0) {
+            System.out.println("usage: "+VoldemortLoadTester.class+" [bootstrap URL] [GET|PUT] [prefix|default:"+prefix+"]");
+            System.exit(-1);
+        }
 
         String url = "tcp://127.0.0.1:6666";
         if (args.length >= 1) {

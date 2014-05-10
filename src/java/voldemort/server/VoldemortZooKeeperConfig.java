@@ -206,7 +206,7 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements ZKDataL
     public void setWatcher(Watcher watcher) {
         activeNodeZKListener.addWatcher(watcher);
 
-        logger.info("Registered " + watcher + " as watcher for ZooKeeper instance.");
+        logger.info("Added " + watcher + " as watcher for ActiveNodeZKListener");
     }
 
     public String getHostname() {
