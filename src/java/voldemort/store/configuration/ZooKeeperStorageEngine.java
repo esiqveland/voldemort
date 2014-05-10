@@ -192,8 +192,10 @@ public class ZooKeeperStorageEngine extends AbstractStorageEngine<String, String
             VectorClock clock = new VectorClock(childStat.getCtime());
 
             boolean watch = false;
-            if (MetadataStore.METADATA_KEYS.contains(key)) {
-                watch = true;
+            for(String metakey : MetadataStore.REQUIRED_KEYS) {
+                if (key.contains(metakey)) {
+                    watch = true;
+                }
             }
             String data;
             data = new String(voldemortZooKeeperConfig.getZooKeeper().getData(key, watch, childStat));

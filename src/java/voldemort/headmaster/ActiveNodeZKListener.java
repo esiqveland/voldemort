@@ -84,6 +84,10 @@ public class ActiveNodeZKListener implements Watcher {
                 break;
         }
 
+        for(Watcher w : watcherList) {
+            w.process(event);
+        }
+
     }
 
     private void handleNodeDeleted(WatchedEvent event) {
@@ -260,7 +264,7 @@ public class ActiveNodeZKListener implements Watcher {
     }
 
     private boolean isBeingWatched(String path) {
-        if (path.equals(clusternode)) {
+        if (path.equals(clusternode) || path.contains("stores.xml")) {
             return true;
         }
         if(watches.containsKey(path))
