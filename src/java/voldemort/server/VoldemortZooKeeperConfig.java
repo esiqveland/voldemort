@@ -67,6 +67,7 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements ZKDataL
             }
         } catch (Exception e) {
 
+            logger.error("Failed reading config from ZK", e);
             try {
                 this.zk.exists("/config/nodes/" + this.hostname + "/server.properties", true);
             } catch (KeeperException e1) {
@@ -90,6 +91,7 @@ public class VoldemortZooKeeperConfig extends VoldemortConfig implements ZKDataL
             nodeid = VoldemortConfig.NEW_ACTIVE_NODE_STRING;
         }
 
+        logger.debug("Registered aliveness with status: "+ nodeid);
         String path = "/active/" + this.hostname;
 
         try {
