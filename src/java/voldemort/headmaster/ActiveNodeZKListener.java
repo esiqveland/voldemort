@@ -10,8 +10,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.data.Stat;
-import org.hyperic.sigar.cmd.Watch;
-import voldemort.tools.ZKDataListener;
 import voldemort.utils.ConfigurationException;
 
 public class ActiveNodeZKListener implements Watcher {

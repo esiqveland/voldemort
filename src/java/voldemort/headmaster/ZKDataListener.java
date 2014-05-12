@@ -1,4 +1,4 @@
-package voldemort.tools;
+package voldemort.headmaster;
 
 import org.apache.zookeeper.Watcher;
 

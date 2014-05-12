@@ -6,13 +6,10 @@ import org.apache.zookeeper.*;
 import org.apache.zookeeper.data.Stat;
 import voldemort.VoldemortException;
 import voldemort.headmaster.ActiveNodeZKListener;
-import voldemort.store.configuration.ConfigurationStorageEngine;
-import voldemort.tools.ZKDataListener;
+import voldemort.headmaster.ZKDataListener;
 import voldemort.utils.ConfigurationException;
 import voldemort.utils.Props;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.StringReader;
 import java.net.InetAddress;

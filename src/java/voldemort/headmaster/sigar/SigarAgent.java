@@ -5,7 +5,7 @@ import org.apache.zookeeper.WatchedEvent;
 import voldemort.headmaster.ActiveNodeZKListener;
 import voldemort.headmaster.Headmaster;
 import voldemort.headmaster.HeadmasterTools;
-import voldemort.tools.ZKDataListener;
+import voldemort.headmaster.ZKDataListener;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
