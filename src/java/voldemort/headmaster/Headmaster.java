@@ -219,6 +219,7 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
             int newId = currentCluster.getNumberOfNodes();
 
             Node newNode = new Node(newId, child, DEFAULT_HTTP_PORT, DEFAULT_SOCKET_PORT,DEFAULT_ADMIN_PORT,new ArrayList<Integer>());
+            logger.info("New node regisering: + " + child + " : " + newId);
             return newNode;
         }
 
@@ -235,15 +236,25 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
             //This message is for someone else
             return;
         }
-
-
         currentClusterLock.lock();
         try {
             List<String> children = anzkl.getChildrenList(path, true);
 
             HashMap<String,Node> changeMap = new HashMap<>();
 
+            /* Logging code */
+
             logger.info("Start children changed");
+            String members = "";
+            for (String child : children) {
+                members += child + " ";
+            }
+            members.substring(0,members.length()-1);
+
+
+
+
+            logger.info("/active members: " + members);
             for (String child : children){
                 Node newNode = locateNewChildAndHandOutId(child);
                 if ( newNode != null ){
