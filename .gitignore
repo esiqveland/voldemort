@@ -1,3 +1,4 @@
+config/single_node_cluster/config/STORES
 classes
 dist
 *~
@@ -20,3 +21,5 @@ voldsys$_*
 .project
 .settings
 .pydevproject
+.gradle
+build
