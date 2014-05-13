@@ -17,11 +17,15 @@
 package voldemort.store.bdb;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import javax.management.ObjectName;
+
+import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
 import voldemort.VoldemortException;
@@ -33,6 +37,7 @@ import voldemort.store.StorageEngine;
 import voldemort.store.StorageInitializationException;
 import voldemort.store.StoreDefinition;
 import voldemort.store.bdb.stats.AggregatedBdbEnvironmentStats;
+import voldemort.store.bdb.stats.BdbEnvironmentStats;
 import voldemort.utils.ByteArray;
 import voldemort.utils.ByteUtils;
 import voldemort.utils.JmxUtils;
@@ -198,6 +203,71 @@ public class BdbStorageConfiguration implements StorageConfiguration {
                 return engine;
             } catch(DatabaseException d) {
                 throw new StorageInitializationException(d);
+            }
+        }
+    }
+
+    /**
+     * Clean up the environment object for the given storage engine
+     */
+    @Override
+    public void removeStorageEngine(StorageEngine<ByteArray, byte[], byte[]> engine) {
+        String storeName = engine.getName();
+        BdbStorageEngine bdbEngine = (BdbStorageEngine) engine;
+
+        synchronized(lock) {
+
+            // Only cleanup the environment if it is per store. We cannot
+            // cleanup a shared 'Environment' object
+            if(useOneEnvPerStore) {
+
+                Environment environment = this.environments.get(storeName);
+                if(environment == null) {
+                    // Nothing to clean up.
+                    return;
+                }
+
+                // Remove from the set of unreserved stores if needed.
+                if(this.unreservedStores.remove(environment)) {
+                    logger.info("Removed environment for store name: " + storeName
+                                + " from unreserved stores");
+                } else {
+                    logger.info("No environment found in unreserved stores for store name: "
+                                + storeName);
+                }
+
+                // Try to delete the BDB directory associated
+                File bdbDir = environment.getHome();
+                if(bdbDir.exists() && bdbDir.isDirectory()) {
+                    String bdbDirPath = bdbDir.getPath();
+                    try {
+                        FileUtils.deleteDirectory(bdbDir);
+                        logger.info("Successfully deleted BDB directory : " + bdbDirPath
+                                    + " for store name: " + storeName);
+                    } catch(IOException e) {
+                        logger.error("Unable to delete BDB directory: " + bdbDirPath
+                                     + " for store name: " + storeName);
+                    }
+                }
+
+                // Remove the reference to BdbEnvironmentStats, which holds a
+                // reference to the Environment
+                BdbEnvironmentStats bdbEnvStats = bdbEngine.getBdbEnvironmentStats();
+                this.aggBdbStats.unTrackEnvironment(bdbEnvStats);
+
+                // Unregister the JMX bean for Environment
+                if(voldemortConfig.isJmxEnabled()) {
+                    ObjectName name = JmxUtils.createObjectName(JmxUtils.getPackageName(bdbEnvStats.getClass()),
+                                                                storeName);
+                    // Un-register the environment stats mbean
+                    JmxUtils.unregisterMbean(name);
+                }
+
+                // Cleanup the environment
+                environment.close();
+                this.environments.remove(storeName);
+                logger.info("Successfully closed the environment for store name : " + storeName);
+
             }
         }
     }
@@ -434,4 +504,5 @@ public class BdbStorageConfiguration implements StorageConfiguration {
     public long getReservedCacheSize() {
         return this.reservedCacheSize;
     }
+
 }

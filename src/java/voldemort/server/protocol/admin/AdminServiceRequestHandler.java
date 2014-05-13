@@ -23,7 +23,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -172,7 +171,11 @@ public class AdminServiceRequestHandler implements RequestHandler {
                 break;
             case UPDATE_METADATA:
                 ProtoUtils.writeMessage(outputStream,
-                                        handleUpdateMetadata(request.getUpdateMetadata()));
+                                        handleSetMetadata(request.getUpdateMetadata()));
+                break;
+            case UPDATE_STORE_DEFINITIONS:
+                ProtoUtils.writeMessage(outputStream,
+                                        handleUpdateStoreDefinitions(request.getUpdateMetadata()));
                 break;
             case UPDATE_METADATA_PAIR:
                 ProtoUtils.writeMessage(outputStream,
@@ -757,8 +760,8 @@ public class AdminServiceRequestHandler implements RequestHandler {
 
                         job.setFilter(request.getFilterNodeIdsList(),
                                       request.hasFilterZoneId() ? request.getFilterZoneId()
-                                                         : Zone.UNSET_ZONE_ID,
-                                                         request.getFilterStoreNamesList());
+                                                               : Zone.UNSET_ZONE_ID,
+                                      request.getFilterStoreNamesList());
                         job.run();
                     } else {
                         logger.error("SlopPurgeJob is not initialized.");
@@ -1208,7 +1211,7 @@ public class AdminServiceRequestHandler implements RequestHandler {
         return response.build();
     }
 
-    public VAdminProto.UpdateMetadataResponse handleUpdateMetadata(VAdminProto.UpdateMetadataRequest request) {
+    public VAdminProto.UpdateMetadataResponse handleSetMetadata(VAdminProto.UpdateMetadataRequest request) {
         VAdminProto.UpdateMetadataResponse.Builder response = VAdminProto.UpdateMetadataResponse.newBuilder();
 
         try {
@@ -1216,6 +1219,7 @@ public class AdminServiceRequestHandler implements RequestHandler {
             String keyString = ByteUtils.getString(key.get(), "UTF-8");
             if(MetadataStore.METADATA_KEYS.contains(keyString)) {
                 Versioned<byte[]> versionedValue = ProtoUtils.decodeVersioned(request.getVersioned());
+
                 logger.info("Updating metadata for key '" + keyString + "'");
                 metadataStore.put(new ByteArray(ByteUtils.getBytes(keyString, "UTF-8")),
                                   versionedValue,
@@ -1229,7 +1233,31 @@ public class AdminServiceRequestHandler implements RequestHandler {
 
         return response.build();
     }
-    
+
+    public VAdminProto.UpdateMetadataResponse handleUpdateStoreDefinitions(VAdminProto.UpdateMetadataRequest request) {
+        VAdminProto.UpdateMetadataResponse.Builder response = VAdminProto.UpdateMetadataResponse.newBuilder();
+
+        try {
+            ByteArray key = ProtoUtils.decodeBytes(request.getKey());
+            String keyString = ByteUtils.getString(key.get(), "UTF-8");
+            if(MetadataStore.METADATA_KEYS.contains(keyString)) {
+                Versioned<byte[]> versionedValue = ProtoUtils.decodeVersioned(request.getVersioned());
+
+                // If updating stores.xml, go through each store entry and do a
+                // corresponding put
+                if(keyString.equals(MetadataStore.STORES_KEY)) {
+                    metadataStore.updateStoreDefinitions(versionedValue);
+                }
+                logger.info("Successfully updated metadata for key '" + keyString + "'");
+            }
+        } catch(VoldemortException e) {
+            response.setError(ProtoUtils.encodeError(errorCodeMapper, e));
+            logger.error("handleUpdateMetadata failed for request(" + request.toString() + ")", e);
+        }
+
+        return response.build();
+    }
+
     public VAdminProto.UpdateMetadataPairResponse handleUpdateMetadataPair(VAdminProto.UpdateMetadataPairRequest request) {
         VAdminProto.UpdateMetadataPairResponse.Builder response = VAdminProto.UpdateMetadataPairResponse.newBuilder();
         try {
@@ -1237,26 +1265,32 @@ public class AdminServiceRequestHandler implements RequestHandler {
             ByteArray storesKey = ProtoUtils.decodeBytes(request.getStoresKey());
             String clusterKeyString = ByteUtils.getString(clusterKey.get(), "UTF-8");
             String storesKeyString = ByteUtils.getString(storesKey.get(), "UTF-8");
-            
-            if (MetadataStore.METADATA_KEYS.contains(clusterKeyString) && MetadataStore.METADATA_KEYS.contains(storesKeyString)) {
-                
+
+            if(MetadataStore.METADATA_KEYS.contains(clusterKeyString)
+               && MetadataStore.METADATA_KEYS.contains(storesKeyString)) {
+
                 Versioned<byte[]> clusterVersionedValue = ProtoUtils.decodeVersioned(request.getClusterValue());
                 Versioned<byte[]> storesVersionedValue = ProtoUtils.decodeVersioned(request.getStoresValue());
-      
+
                 metadataStore.writeLock.lock();
                 try {
-                    logger.info("Updating metadata for keys '" + clusterKeyString + "'" +  " and '" + storesKeyString + "'");
+                    logger.info("Updating metadata for keys '" + clusterKeyString + "'" + " and '"
+                                + storesKeyString + "'");
                     metadataStore.put(clusterKey, clusterVersionedValue, null);
+
+                    // replace this with put
                     metadataStore.put(storesKey, storesVersionedValue, null);
-                    logger.info("Successfully updated metadata for keys '" + clusterKeyString + "'" +  " and '" + storesKeyString + "'");
-                }
-                finally {
+                    // metadataStore.updateStoreDefinitions(storesVersionedValue);
+                    logger.info("Successfully updated metadata for keys '" + clusterKeyString + "'"
+                                + " and '" + storesKeyString + "'");
+                } finally {
                     metadataStore.writeLock.unlock();
                 }
             }
         } catch(VoldemortException e) {
             response.setError(ProtoUtils.encodeError(errorCodeMapper, e));
-            logger.error("handleUpdateMetadataPair failed for request(" + request.toString() + ")", e);
+            logger.error("handleUpdateMetadataPair failed for request(" + request.toString() + ")",
+                         e);
         }
         return response.build();
     }
@@ -1327,17 +1361,13 @@ public class AdminServiceRequestHandler implements RequestHandler {
                                                     "slop",
                                                     true);
                     } else {
-                        // update stores list in metadata store
                         List<StoreDefinition> oldStoreDefList = metadataStore.getStoreDefList();
-                        List<StoreDefinition> newStoreDefList = new ArrayList<StoreDefinition>();
 
                         for(StoreDefinition storeDef: oldStoreDefList) {
                             boolean isReadOnly = storeDef.getType()
                                                          .compareTo(ReadOnlyStorageConfiguration.TYPE_NAME) == 0;
                             if(storeDef.isView()) {
-                                if(storeDef.getViewTargetStoreName().compareTo(storeName) != 0) {
-                                    newStoreDefList.add(storeDef);
-                                } else {
+                                if(storeDef.getViewTargetStoreName().compareTo(storeName) == 0) {
                                     logger.info("Deleting view '" + storeDef.getName() + "'");
                                     storageService.removeEngine(storeRepository.getStorageEngine(storeDef.getName()),
                                                                 isReadOnly,
@@ -1347,9 +1377,7 @@ public class AdminServiceRequestHandler implements RequestHandler {
                                                 + "'");
                                 }
                             } else {
-                                if(storeDef.getName().compareTo(storeName) != 0) {
-                                    newStoreDefList.add(storeDef);
-                                } else {
+                                if(storeDef.getName().compareTo(storeName) == 0) {
                                     logger.info("Deleting store '" + storeDef.getName() + "'");
                                     storageService.removeEngine(storeRepository.getStorageEngine(storeDef.getName()),
                                                                 isReadOnly,
@@ -1362,7 +1390,8 @@ public class AdminServiceRequestHandler implements RequestHandler {
                         }
 
                         try {
-                            metadataStore.put(MetadataStore.STORES_KEY, newStoreDefList);
+                            // Update the metadata
+                            metadataStore.deleteStoreDefinition(storeName);
                         } catch(Exception e) {
                             throw new VoldemortException(e);
                         }
@@ -1416,26 +1445,19 @@ public class AdminServiceRequestHandler implements RequestHandler {
 
                     logger.info("Adding new store '" + def.getName() + "'");
                     // open the store
-                    storageService.openStore(def);
+                    StorageEngine<ByteArray, byte[], byte[]> engine = storageService.openStore(def);
 
                     // update stores list in metadata store (this also has the
                     // effect of updating the stores.xml file)
-                    List<StoreDefinition> currentStoreDefs;
-                    List<Versioned<byte[]>> v = metadataStore.get(MetadataStore.STORES_KEY, null);
-
-                    if(((v.size() > 0) ? 1 : 0) > 0) {
-                        Versioned<byte[]> currentValue = v.get(0);
-                        currentStoreDefs = mapper.readStoreList(new StringReader(ByteUtils.getString(currentValue.getValue(),
-                                                                                                     "UTF-8")));
-                    } else {
-                        currentStoreDefs = Lists.newArrayList();
-                    }
-                    currentStoreDefs.add(def);
                     try {
-                        metadataStore.put(MetadataStore.STORES_KEY, currentStoreDefs);
+                        metadataStore.addStoreDefinition(def);
                     } catch(Exception e) {
+                        // rollback open store operation
+                        boolean isReadOnly = ReadOnlyStorageConfiguration.TYPE_NAME.equals(def.getType());
+                        storageService.removeEngine(engine, isReadOnly, def.getType(), true);
                         throw new VoldemortException(e);
                     }
+
                     logger.info("Successfully added new store '" + def.getName() + "'");
                 } else {
                     logger.error("Failure to add a store with the same name '" + def.getName()

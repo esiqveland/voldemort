@@ -56,8 +56,6 @@ import voldemort.common.service.ServiceType;
 import voldemort.routing.RoutingStrategy;
 import voldemort.routing.RoutingStrategyFactory;
 import voldemort.routing.RoutingStrategyType;
-import voldemort.serialization.SerializerDefinition;
-import voldemort.serialization.avro.versioned.SchemaEvolutionValidator;
 import voldemort.server.RequestRoutingType;
 import voldemort.server.StoreRepository;
 import voldemort.server.VoldemortConfig;
@@ -110,6 +108,7 @@ import voldemort.utils.EventThrottler;
 import voldemort.utils.JmxUtils;
 import voldemort.utils.Pair;
 import voldemort.utils.ReflectUtils;
+import voldemort.utils.StoreDefinitionUtils;
 import voldemort.utils.SystemTime;
 import voldemort.utils.Time;
 import voldemort.utils.Utils;
@@ -395,24 +394,7 @@ public class StorageService extends AbstractService {
         logger.info("Initializing stores:");
 
         logger.info("Validating schemas:");
-        String AVRO_GENERIC_VERSIONED_TYPE_NAME = "avro-generic-versioned";
-
-        for(StoreDefinition storeDef: storeDefs) {
-            SerializerDefinition keySerDef = storeDef.getKeySerializer();
-            SerializerDefinition valueSerDef = storeDef.getValueSerializer();
-
-            if(keySerDef.getName().equals(AVRO_GENERIC_VERSIONED_TYPE_NAME)) {
-
-                SchemaEvolutionValidator.checkSchemaCompatibility(keySerDef);
-
-            }
-
-            if(valueSerDef.getName().equals(AVRO_GENERIC_VERSIONED_TYPE_NAME)) {
-
-                SchemaEvolutionValidator.checkSchemaCompatibility(valueSerDef);
-
-            }
-        }
+        StoreDefinitionUtils.validateSchemasAsNeeded(storeDefs);
         // first initialize non-view stores
         for(StoreDefinition def: storeDefs)
             if(!def.isView())
@@ -636,7 +618,7 @@ public class StorageService extends AbstractService {
         config.update(storeDef);
     }
 
-    public void openStore(StoreDefinition storeDef) {
+    public StorageEngine<ByteArray, byte[], byte[]> openStore(StoreDefinition storeDef) {
 
         logger.info("Opening store '" + storeDef.getName() + "' (" + storeDef.getType() + ").");
 
@@ -679,6 +661,7 @@ public class StorageService extends AbstractService {
             removeEngine(engine, isReadOnly, storeDef.getType(), false);
             throw new VoldemortException(e);
         }
+        return engine;
     }
 
     /**
@@ -752,9 +735,22 @@ public class StorageService extends AbstractService {
         }
 
         storeRepository.removeStorageEngine(storeName);
-        if(truncate)
+
+        // Then truncate (if needed) and close
+        if(truncate) {
             engine.truncate();
+        }
         engine.close();
+
+        // Also remove any state in the StorageConfiguration (if required)
+        StorageConfiguration config = storageConfigs.get(storeType);
+        if(config == null) {
+            throw new ConfigurationException("Attempt to close storage engine " + engine.getName()
+                                             + " but " + storeType
+                                             + " storage engine has not been enabled.");
+        }
+        config.removeStorageEngine(engine);
+
     }
 
     /**

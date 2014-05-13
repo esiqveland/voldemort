@@ -4,8 +4,6 @@ import static voldemort.TestUtils.getClock;
 
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -13,12 +11,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runners.Parameterized.Parameters;
 
 import voldemort.ServerTestUtils;
+import voldemort.TestUtils;
 import voldemort.cluster.Cluster;
 import voldemort.restclient.R2Store;
 import voldemort.restclient.RESTClientConfig;
@@ -31,6 +30,7 @@ import voldemort.versioning.Version;
 import voldemort.versioning.Versioned;
 import voldemort.xml.ClusterMapper;
 
+import com.google.common.collect.Lists;
 import com.linkedin.r2.transport.common.bridge.client.TransportClient;
 import com.linkedin.r2.transport.http.client.HttpClientFactory;
 
@@ -40,6 +40,7 @@ public class RestServiceR2StoreTest extends AbstractByteArrayStoreTest {
     private static HttpClientFactory clientFactory;
 
     private static final String STORE_NAME = "test";
+    private static final Logger logger = Logger.getLogger(RestServiceR2StoreTest.class);
     private static String storesXmlfile = "test/common/coordinator/config/stores.xml";
     private static String clusterXmlFile = "test/common/coordinator/config/rest_cluster.xml";
     protected static final ClusterMapper clusterMapper = new ClusterMapper();
@@ -50,15 +51,10 @@ public class RestServiceR2StoreTest extends AbstractByteArrayStoreTest {
     public static String socketUrl = "";
     private int nodeId;
 
-    @Parameters
-    public static Collection<Object[]> modes() {
-        Object[][] data = new Object[][] { { true }, { false } };
-        return Arrays.asList(data);
-    }
-
     @Override
     @Before
     public void setUp() {
+        logger.info(" Initial SEED used for random number generator: " + TestUtils.SEED);
         final int numServers = 1;
         this.nodeId = 0;
         servers = new VoldemortServer[numServers];
@@ -149,13 +145,6 @@ public class RestServiceR2StoreTest extends AbstractByteArrayStoreTest {
         System.out.println("found");
         printBytes(found.get(0).getValue());
         assertTrue("Values not equal!", valuesEqual(versioned.getValue(), found.get(0).getValue()));
-    }
-
-    public void printBytes(byte[] in) {
-        System.out.println("Lenght: " + in.length);
-        for(int i = 0; i < in.length; i++)
-            System.out.print(in[i] + ",");
-        System.out.println("\n");
     }
 
     @Override
@@ -249,13 +238,100 @@ public class RestServiceR2StoreTest extends AbstractByteArrayStoreTest {
         List<ByteArray> keysForGet = keys.subList(0, countForGet);
         List<byte[]> valuesForGet = values.subList(0, countForGet);
         Map<ByteArray, List<Versioned<byte[]>>> result = store.getAll(keysForGet, null);
-        assertEquals(countForGet, result.size());
-        for(int i = 0; i < keysForGet.size(); ++i) {
-            ByteArray key = keysForGet.get(i);
-            byte[] expectedValue = valuesForGet.get(i);
-            List<Versioned<byte[]>> versioneds = result.get(key);
-            assertNotNull(versioneds);
-            assertGetAllValues(expectedValue, versioneds);
+        assertGetAllValues(keysForGet, valuesForGet, result);
+    }
+
+    @Test
+    public void testGetAllWithBinaryData() throws Exception {
+        Store<ByteArray, byte[], byte[]> store = getStore();
+        List<ByteArray> keys = Lists.newArrayList();
+        List<byte[]> values = Lists.newArrayList();
+
+        // The Byte 0x8c is interesting, because if you use GetContent method of
+        // MimeBodyPart it gets converted to 0xc2 and 0x8c
+        // This thread tracks this question
+        // http://stackoverflow.com/questions/23023583/mimebodypart-getcontent-corrupts-binary-data
+
+        byte[] interestingByte = new byte[] { (byte) 0x8c };
+        ByteArray interestingKey = new ByteArray(interestingByte);
+
+        keys.add(interestingKey);
+        values.add(interestingByte);
+
+        // Add all possible byte values
+        byte[] allPossibleBytes = getAllPossibleBytes();
+        ByteArray allPossibleKey = new ByteArray(allPossibleBytes);
+        keys.add(allPossibleKey);
+        values.add(allPossibleBytes);
+
+        assertEquals(keys.size(), values.size());
+        int count = keys.size();
+
+        for(int i = 0; i < count; i++) {
+            VectorClock vc = getClock(0, 0);
+            store.put(keys.get(i), new Versioned<byte[]>(values.get(i), vc), null);
+        }
+
+        Map<ByteArray, List<Versioned<byte[]>>> result = store.getAll(keys, null);
+        assertGetAllValues(keys, values, result);
+    }
+
+    @Test
+    public void testGetWithBinaryData() throws Exception {
+        Store<ByteArray, byte[], byte[]> store = getStore();
+
+        byte[] allPossibleBytes = getAllPossibleBytes();
+        ByteArray key = new ByteArray(allPossibleBytes);
+        VectorClock vc = getClock(0, 0);
+        Versioned<byte[]> versioned = new Versioned<byte[]>(allPossibleBytes, vc);
+        store.put(key, versioned, null);
+
+        List<Versioned<byte[]>> found = store.get(key, null);
+        assertEquals("Should only be one version stored.", 1, found.size());
+
+        System.out.println("individual bytes");
+        System.out.println("input");
+        printBytes(versioned.getValue());
+
+        System.out.println("found");
+        printBytes(found.get(0).getValue());
+        assertTrue("Values not equal!", valuesEqual(versioned.getValue(), found.get(0).getValue()));
+    }
+
+    @Test
+    public void testGetAllWithBigValueSizes() throws Exception {
+        // Note that through Rest interface only upto 4096 bytes can be sent in
+        // Http header message. That limits the keySize range.
+        int[] keySizes = { 50, 100, 500, 1000 };
+
+        /*- TODO HttpChunkAggregator limit is constrained by the chunk aggregator
+         in two places:
+         1. Coordinator pipeline factory's HttpChunkAggregator currently is
+         limited to 1048576 bytes.
+         2. The HttpChunkAggregator in r2 layer which accepts the response
+         limits the Http content to roughly around ~2Mb
+        
+         should all this be changed to support higher data sizes ?
+         */
+
+        int[] valueSizes = { 10000, 50000, 100000, 500000 };
+        for(int i = 0; i < keySizes.length; i++) {
+            logger.info("Testing with keySize = " + keySizes[i] + " and Value sizes: "
+                        + valueSizes[i]);
+            this.testGetAllWithBigValueSizes(getStore(), keySizes[i], valueSizes[i], 3);
+        }
+    }
+
+    @Test
+    public void testGetWithBigValueSizes() throws Exception {
+        // TODO refer to the notes above for limitation of picking keysizes to
+        // test
+        int[] keySizes = { 10, 50, 100, 500, 1000 };
+        int[] valueSizes = { 10000, 50000, 100000, 500000, 1000000 };
+        for(int i = 0; i < keySizes.length; i++) {
+            logger.info("Testing with keySize = " + keySizes[i] + " and Value sizes: "
+                        + valueSizes[i]);
+            this.testGetWithBigValueSizes(getStore(), keySizes[i], valueSizes[i]);
         }
     }
 }

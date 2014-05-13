@@ -1,3 +1,40 @@
+Release 1.8.2 on 05/09/2014
+
+* Bug fix in MetadataStore regarding updation of routing strategy
+
+Release 1.8.1 on 05/01/2014
+
+* Fix AbstractStoreClientFactory for backwards compatibility
+* Cleaned up logging messages
+* Unit tests for big Binary data
+* Refactored voldemort admin tool - Phase 1 and Phase 2
+
+Release 1.8.0 on 04/21/2014
+
+* Split the stores.xml into individual stores on Voldemort server
+* Maintaing backwards compatibility of MetadataStore
+* DefaultStoreClient bootstraps using store name (instead of stores.xml)
+* New Admin tool functionality to update stores (instead of replace)
+
+Release 1.7.3 on 04/16/2014
+
+* Fix RESTClientFactory to return a LazyStoreClient
+
+Release 1.7.2 on 04/15/2014
+
+* Quota limiting related fix
+* Coordinator related fix
+
+Release 1.7.1 on 04/10/2014
+
+* Same as 1.7.0
+
+Release 1.7.0 on 04/09/2014
+
+* Improves BDB coversion process and documentations
+* Adds scala build support and shell (Saurabh Bhatia)
+* Add removeStorageEngine call to StorageConfiguration
+
 Release 1.6.9 on 03/19/2014
 
 * Fix a big where StreamingClient will throw NPE if not initialized
