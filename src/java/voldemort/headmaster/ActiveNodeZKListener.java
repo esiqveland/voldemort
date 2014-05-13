@@ -23,6 +23,10 @@ public class ActiveNodeZKListener implements Watcher {
     private String zkUrl;
     private boolean connected;
     private List<ZKDataListener> zkDataListeners;
+
+    /**
+     * Holds persistent watches.
+     */
     private Map<String, ZKDataListener> watches;
 
     /**
@@ -179,12 +183,6 @@ public class ActiveNodeZKListener implements Watcher {
         }
     }
 
-    public void removeDatalistener(ZKDataListener listener) {
-        if(zkDataListeners.contains(listener)) {
-            zkDataListeners.remove(listener);
-        }
-    }
-
     public void addDataListener(ZKDataListener listener) {
         if(!zkDataListeners.contains(listener)) {
             zkDataListeners.add(listener);
@@ -259,15 +257,6 @@ public class ActiveNodeZKListener implements Watcher {
 
     public void setWatch(String path) {
         resetWatch(path);
-    }
-
-    private boolean isBeingWatched(String path) {
-        if (path.equals(clusternode) || path.contains("stores.xml")) {
-            return true;
-        }
-        if(watches.containsKey(path))
-            return true;
-        return false;
     }
 
     public ZooKeeper getZooKeeper() {
