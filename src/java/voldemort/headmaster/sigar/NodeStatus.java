@@ -16,8 +16,16 @@ public class NodeStatus {
     public static final String VOLDEMORT_DATA_DIR = "/home/king/src/voldemort/data/bdb";
     public static final String DISK_USAGE = "/";
 
-    public NodeStatus(){
+    private String monitorDir;
+
+    public NodeStatus(String monitorDir) {
+        this();
+        this.monitorDir = monitorDir;
+    }
+
+    public NodeStatus() {
         sigar = new Sigar();
+        monitorDir = VOLDEMORT_DATA_DIR;
     }
 
     public Double getMemoryUsage() {
@@ -49,8 +57,7 @@ public class NodeStatus {
 
         try {
             DirUsage dirUsage;
-            String dir = VOLDEMORT_DATA_DIR;
-            dirUsage = sigar.getDirUsage(dir);
+            dirUsage = sigar.getDirUsage(monitorDir);
             spaceInBytes = dirUsage.getDiskUsage();
 
 //            DiskUsage diskUsage = sigar.getDiskUsage(DISK_USAGE);
@@ -64,28 +71,22 @@ public class NodeStatus {
         return diskUsed;
     }
 
-    public Long getDiskSpaceUsed() {
-        Long space = 0L;
-        Double diskSpace = 0.0;
-        try {
-            DirUsage dirUsage;
-            String dir = VOLDEMORT_DATA_DIR;
-            dirUsage = sigar.getDirUsage(dir);
-            space = (dirUsage.getDiskUsage() / BYTES_TO_MB);
-
-            // For debug/logging purpose
-            diskSpace = dirUsage.getDiskUsage() / BYTES_TO_MB.doubleValue();
-            diskSpace = NodeStatus.doubleFormatted(diskSpace);
-
-        } catch (SigarException e) {
-            logger.error("Failed to retrieve disk space used in megabytes ", e);
-        }
-        return space;
-    }
-
     private static Double doubleFormatted(Double val) {
-        DecimalFormat twoDForm = new DecimalFormat("#.###");
-        return Double.valueOf(twoDForm.format(val));
+        DecimalFormat twoDForm;
+        try {
+            twoDForm = new DecimalFormat("#.###");
+            return Double.valueOf(twoDForm.format(val));
+        } catch (Exception e) {
+        }
+
+        try {
+            twoDForm = new DecimalFormat("#,###");
+            return Double.valueOf(twoDForm.format(val));
+
+        } catch (Exception ex) {
+            logger.error("failed converting decimal", ex);
+        }
+        return 0.0;
     }
 }
 

@@ -28,6 +28,11 @@ public class SigarAgent implements ZKDataListener, Runnable{
 
     private double threshold = 0.0;
 
+    public SigarAgent(String monitorDir) {
+        this();
+        nodeStatus = new NodeStatus(monitorDir);
+    }
+
     public SigarAgent(){
         nodeStatus = new NodeStatus();
         try {
@@ -229,9 +234,14 @@ public class SigarAgent implements ZKDataListener, Runnable{
 
     }
 
-    public static void main(String []args){
+    public static void main(String []args) {
 
-        Thread t = new Thread(new SigarAgent());
+        String dir = null;
+        if (args.length > 0) {
+            dir = args[0];
+        }
+
+        Thread t = new Thread(new SigarAgent(dir));
         t.start();
 
         try {
