@@ -26,6 +26,7 @@ public class SigarAgent implements ZKDataListener, Runnable{
     private double monitor_cpu_usage, monitor_hdd_usage, monitor_ram_usage;
     private String myHostname;
 
+    private double threshold = 0.0;
 
     public SigarAgent(){
         nodeStatus = new NodeStatus();
@@ -105,9 +106,28 @@ public class SigarAgent implements ZKDataListener, Runnable{
         monitorRAM();
         monitorHDD();
 
-        SigarMessageObject smo = new SigarMessageObject(monitor_cpu_usage,monitor_hdd_usage,monitor_ram_usage,myHostname);
-        send(smo);
+        SigarStatusMessage sigarStatusMessage = new SigarStatusMessage(monitor_cpu_usage,monitor_hdd_usage,monitor_ram_usage,myHostname);
+        sendStatusMessageIfAboveThreshold(sigarStatusMessage);
 
+    }
+
+    private void sendStatusMessageIfAboveThreshold(SigarStatusMessage sigarStatusMessage) {
+        boolean doSend = false;
+
+        if (sigarStatusMessage.getCPU() > threshold)
+            doSend = true;
+
+        if (sigarStatusMessage.getHDD() > threshold) {
+            doSend = true;
+        }
+
+        if (sigarStatusMessage.getRAM() > threshold) {
+            doSend = true;
+        }
+
+        if (doSend) {
+            send(sigarStatusMessage);
+        }
     }
 
     private void monitorCPU() {
@@ -125,7 +145,7 @@ public class SigarAgent implements ZKDataListener, Runnable{
 
     }
 
-    private void send(SigarMessageObject smo){
+    private void send(SigarStatusMessage smo){
         // Serialize to a byte array
         ByteArrayOutputStream bStream = new ByteArrayOutputStream();
         ObjectOutput oo = null;

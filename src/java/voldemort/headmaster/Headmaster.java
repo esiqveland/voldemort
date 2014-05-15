@@ -7,7 +7,9 @@ import org.apache.zookeeper.WatchedEvent;
 import voldemort.client.rebalance.RebalancePlan;
 import voldemort.cluster.Cluster;
 import voldemort.cluster.Node;
-import voldemort.headmaster.sigar.SigarListener;
+import voldemort.headmaster.sigar.SigarReceiver;
+import voldemort.headmaster.sigar.SigarStatusMessage;
+import voldemort.headmaster.sigar.StatusMessageListener;
 import voldemort.server.VoldemortConfig;
 
 
@@ -25,7 +27,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 
-public class Headmaster implements Runnable, ZKDataListener {
+public class Headmaster implements Runnable, ZKDataListener, StatusMessageListener {
 
     private static final Logger logger = Logger.getLogger(Headmaster.class);
 
@@ -37,12 +39,13 @@ public class Headmaster implements Runnable, ZKDataListener {
     public static final String HEADMASTER_ELECTION_PATH = "/headmaster_";
     public static final String HEADMASTER_REBALANCE_TOKEN = "/rebalalance_token";
     private static final String HEADMASTER_UNKNOWN = "HEADMASTER_UNKNOWN";
-    public static final int HEADMASTER_SIGAR_LISTENER_PORT = 17777;
 
     public static final String ACTIVEPATH = "/active";
 
     public static final String defaultUrl = "voldemort1.idi.ntnu.no:2181/hjemmekontor";
     public static final String bootStrapUrl = "tcp://voldemort1.idi.ntnu.no:6667";
+
+    public static final int HEADMASTER_SIGAR_LISTENER_PORT = 17777;
 
     private String myHostname;
 
@@ -52,7 +55,8 @@ public class Headmaster implements Runnable, ZKDataListener {
     private Cluster currentCluster;
     private boolean idle = false;
 
-    private SigarListener sigarListener;
+    private SigarReceiver sigarReceiver;
+    private Thread sigarThread;
 
     private String myHeadmaster;
 
@@ -63,14 +67,12 @@ public class Headmaster implements Runnable, ZKDataListener {
     private ConcurrentHashMap<String, Node> handledNodes;
     private Lock currentClusterLock;
 
-    public Headmaster(String zkURL, ActiveNodeZKListener activeNodeZKListener, SigarListener sigarListener) {
-        this(zkURL, activeNodeZKListener);
-        this.sigarListener = sigarListener;
-
-    }
 
     public Headmaster(String zkURL, ActiveNodeZKListener activeNodeZKListener) {
         this(zkURL);
+        SigarReceiver sigarReceiver = new SigarReceiver(Integer.valueOf(Headmaster.HEADMASTER_SIGAR_LISTENER_PORT), this);
+        sigarThread = new Thread(sigarReceiver);
+
         this.anzkl = activeNodeZKListener;
         this.anzkl.addDataListener(this);
     }
@@ -97,6 +99,7 @@ public class Headmaster implements Runnable, ZKDataListener {
         anzkl.setWatch(HEADMASTER_ROOT_PATH+HEADMASTER_REBALANCE_TOKEN);
         //Seed childrenListChanged method with initial children list
         childrenList(ACTIVEPATH);
+
     }
 
     public void registerAsHeadmaster(){
@@ -104,8 +107,9 @@ public class Headmaster implements Runnable, ZKDataListener {
                 HEADMASTER_ROOT_PATH + HEADMASTER_ELECTION_PATH, myHostname+":"+HEADMASTER_SIGAR_LISTENER_PORT, CreateMode.EPHEMERAL_SEQUENTIAL);
 
         myHeadmaster = getNodeNameFromPath(zkPath);
-
         logger.debug("Registered as Headmaster in zookeeper :" + myHeadmaster);
+        sigarThread.start();
+
     }
 
     private String getNodeNameFromPath(String zkPath) {
@@ -362,8 +366,8 @@ public class Headmaster implements Runnable, ZKDataListener {
     @Override
     public void run() {
         synchronized (this) {
-            if (sigarListener != null) {
-                Thread t = new Thread(sigarListener);
+            if (sigarReceiver != null) {
+                Thread t = new Thread(sigarReceiver);
                 t.start();
             }
 
@@ -399,24 +403,32 @@ public class Headmaster implements Runnable, ZKDataListener {
         this.myHeadmaster = myHeadmaster;
     }
 
+    @Override
+    public void statusMessage(SigarStatusMessage sigarStatusMessage) {
+        logger.debug(sigarStatusMessage);
+
+    }
+
     public static void main(String args[]) {
 
         String url = defaultUrl;
         if (args.length == 0) {
             System.out.println(
                     String.format(
-                            "usage: %s [zookeeperurl]\nDefaults to %s", Headmaster.class.getCanonicalName(), defaultUrl));
+                            "usage: %s [zookeeperurl]\nDefaults to %s", Headmaster.class.getCanonicalName(), defaultUrl)
+            );
         } else {
             url = args[0];
         }
 
-        SigarListener sigarListener = new SigarListener(Integer.valueOf(Headmaster.HEADMASTER_SIGAR_LISTENER_PORT));
         ActiveNodeZKListener activeNodeZKListener = new ActiveNodeZKListener(url);
-        Headmaster headmaster = new Headmaster(url, activeNodeZKListener, sigarListener);
-        
+        Headmaster headmaster = new Headmaster(url, activeNodeZKListener);
+
         Thread worker = new Thread(headmaster);
         worker.start();
     }
+
+
 }
 
 

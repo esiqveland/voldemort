@@ -12,24 +12,26 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
 
-public class SigarListener implements Runnable {
+public class SigarReceiver implements Runnable {
 
-    private static final Logger logger = LoggerFactory.getLogger(SigarListener.class);
+    private static final Logger logger = LoggerFactory.getLogger(SigarReceiver.class);
 
     private int listenPort;
     private DatagramSocket socket;
-    private boolean running;
+    private boolean running = false;
+    private StatusMessageListener sigarMessageListener;
 
-    public SigarListener(int listenPort) {
+    public SigarReceiver(int listenPort, StatusMessageListener statusMessageListener) {
         this.listenPort = listenPort;
+        this.sigarMessageListener = statusMessageListener;
         setupSocket();
     }
 
     private void setupSocket() {
         try {
             socket = new DatagramSocket(this.listenPort);
+            setRunning(true);
 
-            this.setRunning(true);
             logger.debug("running ok");
         } catch (SocketException e) {
             logger.error("Error setting up socket on port: {}", this.listenPort, e);
@@ -40,28 +42,38 @@ public class SigarListener implements Runnable {
     @Override
     public void run() {
         byte[] data = new byte[1024];
+
+        logger.info("Starting SigarReceiver on port: {}", listenPort);
         while (isRunning()) {
             DatagramPacket packet = new DatagramPacket(data, data.length);
-            logger.debug("Listening for packet");
             try {
                 socket.receive(packet);
                 byte[] recv = packet.getData();
                 ByteArrayInputStream in = new ByteArrayInputStream(recv);
                 ObjectInputStream is = new ObjectInputStream(in);
                 try {
-                    SigarMessageObject message = (SigarMessageObject) is.readObject();
+                    SigarStatusMessage message = (SigarStatusMessage) is.readObject();
                     logger.debug("Sigar message: {}", message);
+
+                    notifyListeners(message);
+
                 } catch (ClassCastException | ClassNotFoundException e) {
-                    logger.error("error converting message data from {}", packet.getAddress().getCanonicalHostName(), e);
+                    logger.error("error converting message data from {}", packet.getAddress(), e);
                 }
 
             } catch (IOException e) {
                 logger.error("Error receiving packet", e);
                 setRunning(false);
                 if(socket.isClosed()) {
-
+                    setupSocket();
                 }
             }
+        }
+    }
+
+    private void notifyListeners(SigarStatusMessage message) {
+        if(sigarMessageListener != null) {
+            sigarMessageListener.statusMessage(message);
         }
     }
 
@@ -74,9 +86,9 @@ public class SigarListener implements Runnable {
     }
 
     public static void main(String[] args) {
-        SigarListener sigarListener = new SigarListener(Headmaster.HEADMASTER_SIGAR_LISTENER_PORT);
+        SigarReceiver sigarReceiver = new SigarReceiver(Headmaster.HEADMASTER_SIGAR_LISTENER_PORT, null);
 
-        Thread t = new Thread(sigarListener);
+        Thread t = new Thread(sigarReceiver);
         t.start();
 
     }

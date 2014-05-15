@@ -1,10 +1,7 @@
 package voldemort.headmaster.sigar;
 
 import org.apache.log4j.Logger;
-import org.hyperic.sigar.DirUsage;
-import org.hyperic.sigar.Mem;
-import org.hyperic.sigar.Sigar;
-import org.hyperic.sigar.SigarException;
+import org.hyperic.sigar.*;
 import voldemort.server.VoldemortConfig;
 
 import java.text.DecimalFormat;
@@ -16,7 +13,8 @@ public class NodeStatus {
     private static Long BYTES_TO_MB = 1024*1024L;
     private static double max_disk_space_used = 2000;
 
-    public static final String VOLDEMORT_DATA_DIR = "/home/king/src/masteroppgave/voldemort/data/bdb";
+    public static final String VOLDEMORT_DATA_DIR = "/home/king/src/voldemort/data/bdb";
+    public static final String DISK_USAGE = "/";
 
     public NodeStatus(){
         sigar = new Sigar();
@@ -54,6 +52,8 @@ public class NodeStatus {
             String dir = VOLDEMORT_DATA_DIR;
             dirUsage = sigar.getDirUsage(dir);
             spaceInBytes = dirUsage.getDiskUsage();
+
+//            DiskUsage diskUsage = sigar.getDiskUsage(DISK_USAGE);
 
         } catch (SigarException e) {
             logger.error("Failed to retrieve disk space used in megabytes ", e);
