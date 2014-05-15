@@ -38,10 +38,6 @@ public class HeadmasterTest {
                     "</cluster>\n";
 
 
-
-    @Mock
-    ZooKeeper zooKeeper;
-
     @Mock
     ActiveNodeZKListener activeNodeZKListener;
 
