@@ -1,9 +1,11 @@
 package voldemort.headmaster;
 
 import com.google.common.collect.Lists;
-import org.apache.log4j.Logger;
+import joptsimple.internal.Strings;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.WatchedEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import voldemort.client.rebalance.RebalancePlan;
 import voldemort.cluster.Cluster;
 import voldemort.cluster.Node;
@@ -29,7 +31,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Headmaster implements Runnable, ZKDataListener, StatusMessageListener {
 
-    private static final Logger logger = Logger.getLogger(Headmaster.class);
+    private static final Logger logger = LoggerFactory.getLogger(Headmaster.class);
 
     public static final int DEFAULT_HTTP_PORT = 6881;
     public static final int DEFAULT_ADMIN_PORT = 6667;
@@ -232,29 +234,26 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
         if(!isHeadmaster())
             return;
 
-        if(!path.startsWith("/active")){
+        if(!path.startsWith(ACTIVEPATH)){
             //This message is for someone else
             return;
         }
         currentClusterLock.lock();
         try {
+            logger.debug("Start children changed");
+
             List<String> children = anzkl.getChildrenList(path, true);
 
             HashMap<String,Node> changeMap = new HashMap<>();
 
-            /* Logging code */
 
-            logger.info("Start children changed");
-            String members = "";
-            for (String child : children) {
-                members += child + " ";
+            if(children.isEmpty()) {
+                logger.debug("Last node left {}", ACTIVEPATH);
+                return;
             }
-            members.substring(0,members.length()-1);
+            String members = Strings.join(children, " ");
 
-
-
-
-            logger.info("/active members: " + members);
+            logger.info("{} members: {}", ACTIVEPATH, members);
             for (String child : children){
                 Node newNode = locateNewChildAndHandOutId(child);
                 if ( newNode != null ){
