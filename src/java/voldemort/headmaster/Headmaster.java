@@ -415,7 +415,7 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
 
     @Override
     public void statusMessage(SigarStatusMessage sigarStatusMessage) {
-        logger.debug(sigarStatusMessage);
+        logger.debug("status: {}", sigarStatusMessage);
 
     }
 
