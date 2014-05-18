@@ -489,7 +489,7 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
         if(!isHeadmaster()) {
             return;
         }
-        if(lowestnode == null || sigarStatusMessage.getCPU() < lowestnode.getCpustatus()) {
+        if(lowestnode == null || sigarStatusMessage.getHostname().equals(lowestnode.getHost()) || sigarStatusMessage.getCPU() < lowestnode.getCpustatus()) {
             for(Node node: currentCluster.getNodes()) {
                 if (node.getHost().equals(sigarStatusMessage.getHostname())) {
                     Integer i = new Integer(node.getId());
