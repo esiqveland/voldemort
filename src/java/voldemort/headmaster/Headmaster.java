@@ -104,10 +104,6 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
         childrenList(ACTIVEPATH);
 
 
-        logger.debug("Testing moveing partition:");
-        Node fromNode = currentCluster.getNodeById(0);
-        Node toNode = currentCluster.getNodeById(1);
-        moveRandomPartitionInclusterXML(fromNode, toNode);
 
     }
 
