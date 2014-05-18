@@ -60,10 +60,10 @@ public class SigarAgent implements ZKDataListener, Runnable{
             //This message is for someone else
             return;
         }
+        findHeadmaster();
         synchronized (this){
             notifyAll();
         }
-        findHeadmaster();
     }
 
     @Override
@@ -82,8 +82,6 @@ public class SigarAgent implements ZKDataListener, Runnable{
         synchronized (this){
             notifyAll();
         }
-
-
     }
 
     @Override
@@ -177,6 +175,7 @@ public class SigarAgent implements ZKDataListener, Runnable{
                 e.printStackTrace();
             }
         }
+        findHeadmaster();
         while (true) {
             if (hasHeadmaster()) {
                 monitor();
@@ -187,16 +186,23 @@ public class SigarAgent implements ZKDataListener, Runnable{
                     e.printStackTrace();
                 }
             } else {
-                findHeadmaster();
+                synchronized (this) {
+                    try {
+                            wait();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+
             }
 
         }
     }
 
 
-    private void waitForHeadmaster(){
+    private void waitForHeadmaster() {
         //setup watch for children changed
-        anzkl.getChildrenList(Headmaster.HEADMASTER_ROOT_PATH, true);
+//        anzkl.getChildrenList(Headmaster.HEADMASTER_ROOT_PATH, true);
     }
 
     private void findHeadmaster(){
