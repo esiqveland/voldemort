@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import voldemort.client.rebalance.RebalancePlan;
 import voldemort.cluster.Cluster;
 import voldemort.cluster.Node;
+import voldemort.headmaster.sigar.NodeStatus;
 import voldemort.headmaster.sigar.SigarReceiver;
 import voldemort.headmaster.sigar.SigarStatusMessage;
 import voldemort.headmaster.sigar.StatusMessageListener;
@@ -70,6 +71,7 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
     private ConcurrentHashMap<String, Node> handledNodes;
     private Lock currentClusterLock;
 
+    NodeStatus lowestnode;
 
     public Headmaster(String zkURL, ActiveNodeZKListener activeNodeZKListener) {
         this(zkURL);
@@ -483,7 +485,19 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
 
     @Override
     public void statusMessage(SigarStatusMessage sigarStatusMessage) {
-        logger.debug("status: {}", sigarStatusMessage);
+        if(sigarStatusMessage.getCPU() < lowestnode.getCpustatus()) {
+            for(Node node: currentCluster.getNodes()) {
+                if (node.getHost().equals(sigarStatusMessage.getHostname())) {
+                    Integer i = new Integer(node.getId());
+                    logger.info(
+                            "Changing lowest node to hostname:{} value:{}", node.getHost(),
+                            sigarStatusMessage.getCPU()
+                    );
+                    lowestnode = new NodeStatus(node);
+                }
+            }
+        }
+
 
     }
 

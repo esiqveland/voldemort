@@ -72,6 +72,7 @@ public class SigarReceiver implements Runnable {
     }
 
     private void notifyListeners(SigarStatusMessage message) {
+        logger.debug("status: {}", message);
         if(sigarMessageListener != null) {
             sigarMessageListener.statusMessage(message);
         }

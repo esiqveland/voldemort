@@ -4,9 +4,9 @@ import java.io.Serializable;
 
 public class SigarStatusMessage implements Serializable{
 
-    private double CPU;
-    private double HDD;
-    private double RAM;
+    private Double CPU;
+    private Double HDD;
+    private Double RAM;
     private String hostname;
 
     public SigarStatusMessage(double CPU, double HDD, double RAM, String hostname){
@@ -16,7 +16,7 @@ public class SigarStatusMessage implements Serializable{
         this.hostname = hostname;
     }
 
-    public double getCPU() {
+    public Double getCPU() {
         return CPU;
     }
 

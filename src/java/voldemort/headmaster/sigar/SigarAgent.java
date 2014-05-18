@@ -22,7 +22,7 @@ public class SigarAgent implements ZKDataListener, Runnable{
     String currentHeadmaster;
     InetAddress currentHeadmasterAddress;
     private int currentHeadmasterPort;
-    private NodeStatus nodeStatus;
+    private LocalNodeStatus localNodeStatus;
     private double monitor_cpu_usage, monitor_hdd_usage, monitor_ram_usage;
     private String myHostname;
 
@@ -30,11 +30,11 @@ public class SigarAgent implements ZKDataListener, Runnable{
 
     public SigarAgent(String monitorDir) {
         this();
-        nodeStatus = new NodeStatus(monitorDir);
+        localNodeStatus = new LocalNodeStatus(monitorDir);
     }
 
     public SigarAgent(){
-        nodeStatus = new NodeStatus();
+        localNodeStatus = new LocalNodeStatus();
         try {
             ds = new DatagramSocket();
 
@@ -136,17 +136,17 @@ public class SigarAgent implements ZKDataListener, Runnable{
     }
 
     private void monitorCPU() {
-        monitor_cpu_usage = nodeStatus.getCPUUsage();
+        monitor_cpu_usage = localNodeStatus.getCPUUsage();
 
     }
 
     private void monitorRAM() {
-        monitor_ram_usage = nodeStatus.getMemoryUsage();
+        monitor_ram_usage = localNodeStatus.getMemoryUsage();
 
     }
 
     private void monitorHDD() {
-        monitor_hdd_usage = nodeStatus.getDiskUsage();
+        monitor_hdd_usage = localNodeStatus.getDiskUsage();
 
     }
 

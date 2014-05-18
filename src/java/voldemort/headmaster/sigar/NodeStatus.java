@@ -1,93 +1,40 @@
 package voldemort.headmaster.sigar;
 
-import org.apache.log4j.Logger;
-import org.hyperic.sigar.*;
-import voldemort.server.VoldemortConfig;
+import voldemort.cluster.Node;
 
-import java.text.DecimalFormat;
+public class NodeStatus extends Node {
 
-public class NodeStatus {
-    private static final Logger logger = Logger.getLogger(NodeStatus.class);
+    private float cpustatus;
+    private float memstatus;
+    private float diskstatus;
 
-    private static Sigar sigar;
-    private static Long BYTES_TO_MB = 1024*1024L;
-    private static double max_disk_space_used = 2000;
-
-    public static final String VOLDEMORT_DATA_DIR = "/home/king/src/voldemort/data/bdb";
-    public static final String DISK_USAGE = "/";
-
-    private String monitorDir;
-
-    public NodeStatus(String monitorDir) {
-        this();
-        this.monitorDir = monitorDir;
+    public NodeStatus(Node node) {
+        super(node.getId(), node.getHost(), node.getHttpPort(), node.getSocketPort(), node.getAdminPort(),
+                node.getZoneId(), node.getPartitionIds(), node.getRestPort());
     }
 
-    public NodeStatus() {
-        sigar = new Sigar();
-        monitorDir = VOLDEMORT_DATA_DIR;
+    public float getCpustatus() {
+        return cpustatus;
     }
 
-    public Double getMemoryUsage() {
-        Double memUsed = 0.0;
-        Mem mem;
-        try {
-            mem = sigar.getMem();
-
-            memUsed = NodeStatus.doubleFormatted(mem.getUsedPercent());
-        } catch (Exception e) {
-            logger.error("Failed to get memory usage ", e);
-        }
-        return memUsed;
+    public void setCpustatus(float cpustatus) {
+        this.cpustatus = cpustatus;
     }
 
-    public Double getCPUUsage() {
-        Double cpuUsed = 0.0;
-
-        try {
-            cpuUsed = NodeStatus.doubleFormatted(sigar.getCpuPerc().getCombined());
-        } catch (SigarException e) {
-            logger.error("Failed to retrieve CPU-usage ", e);
-        }
-        return cpuUsed;
+    public float getMemstatus() {
+        return memstatus;
     }
 
-    public Double getDiskUsage() {
-        Long spaceInBytes = 0L;
-
-        try {
-            DirUsage dirUsage;
-            dirUsage = sigar.getDirUsage(monitorDir);
-            spaceInBytes = dirUsage.getDiskUsage();
-
-//            DiskUsage diskUsage = sigar.getDiskUsage(DISK_USAGE);
-
-        } catch (SigarException e) {
-            logger.error("Failed to retrieve disk space used in megabytes ", e);
-        }
-
-        Double diskUsed = ((spaceInBytes / BYTES_TO_MB.doubleValue()) / max_disk_space_used) * 100;
-        diskUsed = NodeStatus.doubleFormatted(diskUsed);
-        return diskUsed;
+    public void setMemstatus(float memstatus) {
+        this.memstatus = memstatus;
     }
 
-    private static Double doubleFormatted(Double val) {
-        DecimalFormat twoDForm;
-        try {
-            twoDForm = new DecimalFormat("#.###");
-            return Double.valueOf(twoDForm.format(val));
-        } catch (Exception e) {
-        }
-
-        try {
-            twoDForm = new DecimalFormat("#,###");
-            return Double.valueOf(twoDForm.format(val));
-
-        } catch (Exception ex) {
-            logger.error("failed converting decimal", ex);
-        }
-        return 0.0;
+    public float getDiskstatus() {
+        return diskstatus;
     }
+
+    public void setDiskstatus(float diskstatus) {
+        this.diskstatus = diskstatus;
+    }
+
 }
-
-
