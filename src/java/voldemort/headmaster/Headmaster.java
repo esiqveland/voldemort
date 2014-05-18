@@ -499,7 +499,7 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
                             "Changing lowest node to hostname:{} value:{}", node.getHost(),
                             sigarStatusMessage.getCPU()
                     );
-                    lowestnode = new NodeStatus(node);
+                    lowestnode = new NodeStatus(node, sigarStatusMessage);
                 }
             }
         }

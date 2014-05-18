@@ -8,9 +8,14 @@ public class NodeStatus extends Node {
     private Double memstatus;
     private Double diskstatus;
 
-    public NodeStatus(Node node) {
+    public NodeStatus(Node node, SigarStatusMessage sigarStatusMessage) {
         super(node.getId(), node.getHost(), node.getHttpPort(), node.getSocketPort(), node.getAdminPort(),
                 node.getZoneId(), node.getPartitionIds(), node.getRestPort());
+
+        setCpustatus(sigarStatusMessage.getCPU());
+        setMemstatus(sigarStatusMessage.getRAM());
+        setDiskstatus(sigarStatusMessage.getHDD());
+
     }
 
     public Double getCpustatus() {
