@@ -485,7 +485,11 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
 
     @Override
     public void statusMessage(SigarStatusMessage sigarStatusMessage) {
-        if(sigarStatusMessage.getCPU() < lowestnode.getCpustatus()) {
+
+        if(!isHeadmaster()) {
+            return;
+        }
+        if(lowestnode == null || sigarStatusMessage.getCPU() < lowestnode.getCpustatus()) {
             for(Node node: currentCluster.getNodes()) {
                 if (node.getHost().equals(sigarStatusMessage.getHostname())) {
                     Integer i = new Integer(node.getId());

@@ -53,7 +53,6 @@ public class SigarReceiver implements Runnable {
                 ObjectInputStream is = new ObjectInputStream(in);
                 try {
                     SigarStatusMessage message = (SigarStatusMessage) is.readObject();
-                    logger.debug("Sigar message: {}", message);
 
                     notifyListeners(message);
 
@@ -66,7 +65,10 @@ public class SigarReceiver implements Runnable {
                 setRunning(false);
                 if(socket.isClosed()) {
                     setupSocket();
+                    setRunning(true);
                 }
+            } catch(Exception e) {
+                logger.error("error in receiver for status messages",e);
             }
         }
     }
