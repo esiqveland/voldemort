@@ -21,6 +21,25 @@ public class RebalancePlannerZK {
 
     }
 
+    public RebalancePlan createRebalancePlanGivenCluster(Cluster finalCluster) {
+        String currentClusterXML = anzkl.getStringFromZooKeeper("/config/cluster.xml");
+        Cluster currentCluster = new ClusterMapper().readCluster(new StringReader(currentClusterXML));
+
+        String storesXML = anzkl.getStringFromZooKeeper("/config/stores.xml");
+        List<StoreDefinition> currentStoreDefs = new StoreDefinitionsMapper().readStoreList(new StringReader(storesXML));
+
+        String finalStoresXML = new String(storesXML);
+        List<StoreDefinition> finalStoreDefs = new StoreDefinitionsMapper().readStoreList(new StringReader(finalStoresXML));
+
+        int batch_size = Integer.MAX_VALUE;
+        String outputDir;
+        outputDir = "config/maccluster/expansion/" + System.currentTimeMillis();
+
+        RebalancePlan plan = new RebalancePlan(currentCluster,currentStoreDefs,finalCluster,finalStoreDefs,batch_size,outputDir+"/planner");
+        return plan;
+
+    }
+
     public RebalancePlan createRebalancePlan() {
         String currentClusterXML = anzkl.getStringFromZooKeeper("/config/cluster.xml");
         Cluster currentCluster = new ClusterMapper().readCluster(new StringReader(currentClusterXML));
