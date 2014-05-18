@@ -4,37 +4,36 @@ import voldemort.cluster.Node;
 
 public class NodeStatus extends Node {
 
-    private float cpustatus;
-    private float memstatus;
-    private float diskstatus;
+    private Double cpustatus;
+    private Double memstatus;
+    private Double diskstatus;
 
     public NodeStatus(Node node) {
         super(node.getId(), node.getHost(), node.getHttpPort(), node.getSocketPort(), node.getAdminPort(),
                 node.getZoneId(), node.getPartitionIds(), node.getRestPort());
     }
 
-    public float getCpustatus() {
+    public Double getCpustatus() {
         return cpustatus;
     }
 
-    public void setCpustatus(float cpustatus) {
+    public void setCpustatus(Double cpustatus) {
         this.cpustatus = cpustatus;
     }
 
-    public float getMemstatus() {
+    public Double getMemstatus() {
         return memstatus;
     }
 
-    public void setMemstatus(float memstatus) {
+    public void setMemstatus(Double memstatus) {
         this.memstatus = memstatus;
     }
 
-    public float getDiskstatus() {
+    public Double getDiskstatus() {
         return diskstatus;
     }
 
-    public void setDiskstatus(float diskstatus) {
+    public void setDiskstatus(Double diskstatus) {
         this.diskstatus = diskstatus;
     }
-
 }
