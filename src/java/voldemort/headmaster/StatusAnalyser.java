@@ -10,6 +10,8 @@ import voldemort.headmaster.sigar.NodeStatus;
 import voldemort.headmaster.sigar.SigarReceiver;
 import voldemort.headmaster.sigar.SigarStatusMessage;
 import voldemort.headmaster.sigar.StatusMessageListener;
+import voldemort.server.storage.repairjob.RepairJob;
+import voldemort.tools.AdminToolZK;
 import voldemort.xml.ClusterMapper;
 
 import java.util.*;
@@ -22,14 +24,16 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
 
     private static final Logger logger = LoggerFactory.getLogger(StatusAnalyser.class);
     public static final double CPU_THRESHHOLD = 0.80;
+    public static final int NODE_ID_ALL = -1;
 
     private Headmaster headmaster;
     private SigarReceiver sigarReceiver;
     private ActiveNodeZKListener anzkl;
-    private Cluster currentCluster;
     private Thread sigarThread;
     private boolean performingOperation;
-    private boolean activeListening;
+    private RepairJobRunner repairJobRunner;
+
+    private AdminToolZK adminToolZK;
 
     private HashMap<String, LinkedList<SigarStatusMessage>> messagesFromNodes;
     private ScheduledExecutorService scheduler;
@@ -47,8 +51,10 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
         sigarThread = new Thread(sigarReceiver);
         sigarThread.start();
 
-    }
+        adminToolZK = new AdminToolZK("tcp://192.168.0.236:6667", anzkl);
 
+        repairJobRunner = new RepairJobRunner();
+    }
 
     @Override
     public void statusMessage(SigarStatusMessage sigarStatusMessage) {
@@ -59,8 +65,8 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
         addStatusMessage(sigarStatusMessage);
 
         logger.info("Received message: {}", sigarStatusMessage.toString());
-
     }
+
 
     private void addStatusMessage(SigarStatusMessage msg){
 
@@ -158,12 +164,21 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
         analyseCPU();
     }
 
-
     public void stop() {
         scheduler.shutdown();
     }
 
     public void start() {
-        scheduler.scheduleAtFixedRate(this,0,60, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this,45,60, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(repairJobRunner, 10, 60*60, TimeUnit.SECONDS);
+    }
+
+    private class RepairJobRunner implements Runnable {
+
+        @Override
+        public void run() {
+            logger.info("Running repairjob on all nodes");
+            adminToolZK.repairJob(NODE_ID_ALL);
+        }
     }
 }

@@ -109,8 +109,6 @@ public class Headmaster implements Runnable, ZKDataListener {
         }
         statAnalyser.start();
 
-
-
     }
 
     public void registerAsHeadmaster(){
