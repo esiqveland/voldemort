@@ -404,7 +404,7 @@ public class Rebalancer implements Runnable {
             logger.info("done store put");
 
         } catch(Exception e) {
-            logger.info("Error while changing cluster to " + cluster + "for key " + clusterKey);
+            logger.info("Error while changing cluster to " + cluster + "for key " + clusterKey + ": ", e);
             throw new VoldemortException(e);
         } finally {
             metadataStore.writeLock.unlock();
