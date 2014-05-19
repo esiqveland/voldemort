@@ -137,11 +137,11 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
                         logger.debug("Sanitycheck failed: Calm node is same as struggling");
                         return;
                     }
-                    logger.debug("Initiating partition move from {} to {}",calm_node, strugglingHost);
+                    logger.debug("Initiating partition move from {} to {}",strugglingHost,calm_node);
                     if (!performingOperation){
                         performingOperation = true;
                         try {
-                            headmaster.partitionMoverTrigger(getCalmestNode(), strugglingHost);
+                            headmaster.partitionMoverTrigger(strugglingHost,getCalmestNode());
                         } catch (Exception e){
                             logger.error("Error while moving partition",e);
                         }

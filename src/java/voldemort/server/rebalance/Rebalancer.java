@@ -385,18 +385,23 @@ public class Rebalancer implements Runnable {
                                         final List<StoreDefinition> storeDefs) {
         metadataStore.writeLock.lock();
         try {
+            logger.info("In changeClusterAndStores.");
             VectorClock updatedVectorClock = ((VectorClock) metadataStore.get(clusterKey, null)
                                                                          .get(0)
                                                                          .getVersion()).incremented(metadataStore.getNodeId(),
                                                                                                     System.currentTimeMillis());
+            logger.info("Got clock");
             metadataStore.put(clusterKey, Versioned.value((Object) cluster, updatedVectorClock));
 
             // now put new stores
+            logger.info("put cluster");
             updatedVectorClock = ((VectorClock) metadataStore.get(storesKey, null)
                                                              .get(0)
                                                              .getVersion()).incremented(metadataStore.getNodeId(),
                                                                                         System.currentTimeMillis());
+            logger.info("update clock");
             metadataStore.put(storesKey, Versioned.value((Object) storeDefs, updatedVectorClock));
+            logger.info("done store put");
 
         } catch(Exception e) {
             logger.info("Error while changing cluster to " + cluster + "for key " + clusterKey);

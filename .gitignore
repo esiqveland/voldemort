@@ -23,3 +23,5 @@ voldsys$_*
 .pydevproject
 .gradle
 build
+
+config/maccluster/expansion*

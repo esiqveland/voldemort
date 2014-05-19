@@ -66,6 +66,7 @@ public class RebalancerZK {
         if(failure){
             //Issue rollback of cluster.xml
             zkHandler.uploadAndUpdateFile("/config/cluster.xml", new ClusterMapper().writeCluster(plan.getCurrentCluster()));
+            zkHandler.uploadAndUpdateFile("/config/stores.xml", new StoreDefinitionsMapper().writeStoreList(finalStoreDefs));
 
             //RollBack state
             for (Node nodes : finalCluster.getNodes()){
@@ -73,6 +74,7 @@ public class RebalancerZK {
             }
         } else {
             zkHandler.uploadAndUpdateFile("/config/cluster.xml",new ClusterMapper().writeCluster(finalCluster));
+            zkHandler.uploadAndUpdateFile("/config/stores.xml",new StoreDefinitionsMapper().writeStoreList(finalStoreDefs));
         }
     }
 
