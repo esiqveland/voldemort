@@ -189,7 +189,7 @@ public class ZooKeeperStorageEngine extends AbstractStorageEngine<String, String
 
         try {
             Stat childStat = voldemortZooKeeperConfig.getZooKeeper().exists(key, false);
-            VectorClock clock = new VectorClock(childStat.getCtime());
+            VectorClock clock = new VectorClock(childStat.getMtime());
 
             boolean watch = false;
             for(String metakey : MetadataStore.REQUIRED_KEYS) {

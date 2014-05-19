@@ -1265,18 +1265,26 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                     writeLock.lock();
                     try {
                         // get new version of the object and re sets watch flag if appropriate for the key
+
                         Versioned<String> versioned = innerStore.get(key, null).get(0);
 
-                        Versioned<Object> vObject = convertStringToObject(key, versioned);
+                        VectorClock vectorClock = ((VectorClock) versioned.getVersion()).incremented(getNodeId(), System.currentTimeMillis());
+                        Versioned<String> newVersioned = new Versioned<>(versioned.getValue(), vectorClock);
 
-                        metadataCache.put(key, vObject);
+                        Versioned<Object> vObject = convertStringToObject(key, newVersioned);
+
+
 
                         if(key.equals(CLUSTER_KEY)) {
                             updateRoutingStrategies((Cluster) vObject.getValue(), getStoreDefList());
+                            metadataCache.put(key, vObject);
                         } else if (key.equals(STORES_KEY)) {
-                            updateRoutingStrategies(getCluster(), (List<StoreDefinition>) vObject.getValue());
+                            //updateRoutingStrategies(getCluster(), (List<StoreDefinition>) vObject.getValue());
+                            put(STORES_KEY, vObject);
                         } else if(SYSTEM_STORES_KEY.equals(key)) {
                             throw new VoldemortException("Cannot overwrite system store definitions");
+                        } else {
+                            metadataCache.put(key, vObject);
                         }
 
                     } finally {
