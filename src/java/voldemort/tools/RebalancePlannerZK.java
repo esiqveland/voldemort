@@ -35,7 +35,10 @@ public class RebalancePlannerZK {
         String outputDir;
         outputDir = "config/maccluster/expansion/" + System.currentTimeMillis();
 
+
+
         RebalancePlan plan = new RebalancePlan(currentCluster,currentStoreDefs,finalCluster,finalStoreDefs,batch_size,outputDir+"/planner");
+        anzkl.uploadAndUpdateFile("/config/cluster_final.xml", new ClusterMapper().writeCluster(plan.getFinalCluster()));
         return plan;
 
     }

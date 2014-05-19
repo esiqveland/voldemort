@@ -46,14 +46,9 @@ public class RebalancerZK {
         RebalanceUtils.validateClusterStores(currentCluster, currentStoreDefs);
 
         //Fetch configfiles from ZooKeeper
-        String finalClusterString = zkHandler.getStringFromZooKeeper("/config/cluster_final.xml");
-        Cluster finalCluster = new ClusterMapper().readCluster(new StringReader(finalClusterString));
+        Cluster finalCluster = plan.getFinalCluster();
+        List<StoreDefinition> finalStoreDefs = plan.getFinalStores();
 
-        String originalClusterString = zkHandler.getStringFromZooKeeper("/config/cluster.xml");
-
-        List<StoreDefinition> finalStoreDefs;
-        String storesXML = zkHandler.getStringFromZooKeeper("/config/stores.xml");
-        finalStoreDefs = new StoreDefinitionsMapper().readStoreList(new StringReader(storesXML));
 
         //Validate stores across clusters
         RebalanceUtils.validateClusterStores(finalCluster, finalStoreDefs);
@@ -71,14 +66,14 @@ public class RebalancerZK {
 
         if(failure){
             //Issue rollback of cluster.xml
-            zkHandler.uploadAndUpdateFile("/config/cluster.xml", originalClusterString);
+            zkHandler.uploadAndUpdateFile("/config/cluster.xml", new ClusterMapper().writeCluster(plan.getCurrentCluster()));
 
             //RollBack state
             for (Node nodes : finalCluster.getNodes()){
                 zkHandler.uploadAndUpdateFile("/config/nodes/"+nodes.getHost()+"/server.state", MetadataStore.VoldemortState.NORMAL_SERVER.toString());
             }
         } else {
-            zkHandler.uploadAndUpdateFile("/config/cluster.xml",finalClusterString);
+            zkHandler.uploadAndUpdateFile("/config/cluster.xml",new ClusterMapper().writeCluster(finalCluster));
         }
     }
 
