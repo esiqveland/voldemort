@@ -1,6 +1,5 @@
-package voldemort.tools;
+package voldemort.headmaster.rebalance;
 
-import voldemort.client.rebalance.RebalanceController;
 import voldemort.client.rebalance.RebalancePlan;
 import voldemort.cluster.Cluster;
 import voldemort.cluster.Node;
@@ -33,8 +32,8 @@ public class RebalancerZK {
     }
 
     public void rebalance(RebalancePlan plan){
-        RebalanceController rebalanceController;
-        rebalanceController = new RebalanceController(bootstrapUrl,
+        RebalanceControllerZK rebalanceController;
+        rebalanceController = new RebalanceControllerZK(bootstrapUrl,
                 parallelism,
                 proxyPauseSec);
 

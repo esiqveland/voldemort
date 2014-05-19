@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import voldemort.client.rebalance.RebalancePlan;
 import voldemort.cluster.Cluster;
 import voldemort.cluster.Node;
+import voldemort.headmaster.rebalance.RebalancePlannerZK;
+import voldemort.headmaster.rebalance.RebalancerZK;
 import voldemort.server.VoldemortConfig;
 
 

@@ -1,9 +1,10 @@
-package voldemort.tools;
+package voldemort.headmaster.rebalance;
 
 import voldemort.client.rebalance.RebalancePlan;
 import voldemort.cluster.Cluster;
 import voldemort.headmaster.ActiveNodeZKListener;
 import voldemort.store.StoreDefinition;
+import voldemort.tools.Repartitioner;
 import voldemort.utils.RebalanceUtils;
 import voldemort.xml.ClusterMapper;
 import voldemort.xml.StoreDefinitionsMapper;
