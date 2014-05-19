@@ -29,6 +29,7 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
     private Cluster currentCluster;
     private Thread sigarThread;
     private boolean performingOperation;
+    private boolean activeListening;
 
     private HashMap<String, LinkedList<SigarStatusMessage>> messagesFromNodes;
     private ScheduledExecutorService scheduler;
@@ -41,12 +42,10 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
         this.headmaster = headmaster;
         this.anzkl = anzkl;
         scheduler = Executors.newScheduledThreadPool(1);
-        scheduler.scheduleAtFixedRate(this,0,60, TimeUnit.SECONDS);
 
+        sigarReceiver= new SigarReceiver(Headmaster.HEADMASTER_SIGAR_LISTENER_PORT,this);
         sigarThread = new Thread(sigarReceiver);
-
-
-
+        sigarThread.start();
 
     }
 
@@ -161,14 +160,10 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
 
 
     public void stop() {
-        scheduler.shutdown();;
+        scheduler.shutdown();
     }
 
     public void start() {
-        if(!sigarThread.isAlive()){
-            sigarThread.start();
-        }
         scheduler.scheduleAtFixedRate(this,0,60, TimeUnit.SECONDS);
-
     }
 }
