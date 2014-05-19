@@ -73,6 +73,7 @@ public class Headmaster implements Runnable, ZKDataListener {
         this.anzkl.addDataListener(this);
 
         statAnalyser = new StatusAnalyser(this, anzkl);
+
     }
 
     private Headmaster(String zkURL) {
@@ -102,7 +103,12 @@ public class Headmaster implements Runnable, ZKDataListener {
         if(currentCluster.getNumberOfNodes() != 0) {
             adminUrl = "tcp://" + currentCluster.getNodeById(0).getHost();
             adminUrl += ":" + currentCluster.getNodeById(0).getAdminPort();
+
         }
+        statAnalyser.start();
+
+
+
     }
 
     public void registerAsHeadmaster(){
@@ -435,6 +441,7 @@ public class Headmaster implements Runnable, ZKDataListener {
         currentHeadmaster = HEADMASTER_UNKNOWN;
         myHeadmaster = null;
         handledNodes = new ConcurrentHashMap<>();
+        statAnalyser.stop();
 
     }
 

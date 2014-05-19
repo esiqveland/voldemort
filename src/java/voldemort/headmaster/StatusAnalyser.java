@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 public class StatusAnalyser implements StatusMessageListener, Runnable{
 
     private static final Logger logger = LoggerFactory.getLogger(StatusAnalyser.class);
-    public static final double CPU_THRESHHOLD = 0.70;
+    public static final double CPU_THRESHHOLD = 0.80;
 
     private Headmaster headmaster;
     private SigarReceiver sigarReceiver;
@@ -43,9 +43,9 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
         scheduler = Executors.newScheduledThreadPool(1);
         scheduler.scheduleAtFixedRate(this,0,60, TimeUnit.SECONDS);
 
-        sigarReceiver = new SigarReceiver(Integer.valueOf(Headmaster.HEADMASTER_SIGAR_LISTENER_PORT), this);
         sigarThread = new Thread(sigarReceiver);
-        sigarThread.start();
+
+
 
 
     }
@@ -150,9 +150,6 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
                     performingOperation = false;
                 }
 
-
-
-
             }
         }
     }
@@ -163,5 +160,15 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
     }
 
 
+    public void stop() {
+        scheduler.shutdown();;
+    }
 
+    public void start() {
+        if(!sigarThread.isAlive()){
+            sigarThread.start();
+        }
+        scheduler.scheduleAtFixedRate(this,0,60, TimeUnit.SECONDS);
+
+    }
 }
