@@ -31,13 +31,14 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 
-public class Headmaster implements Runnable, ZKDataListener, StatusMessageListener {
+public class Headmaster implements Runnable, ZKDataListener {
 
     private static final Logger logger = LoggerFactory.getLogger(Headmaster.class);
 
     public static final int DEFAULT_HTTP_PORT = 6881;
     public static final int DEFAULT_ADMIN_PORT = 6667;
     public static final int DEFAULT_SOCKET_PORT = 6666;
+    public static final int HEADMASTER_SIGAR_LISTENER_PORT = 17777;
 
     public static final String HEADMASTER_ROOT_PATH = "/headmaster";
     public static final String HEADMASTER_ELECTION_PATH = "/headmaster_";
@@ -49,8 +50,6 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
     public static final String defaultUrl = "voldemort1.idi.ntnu.no:2181/hjemmekontor";
     public static final String bootStrapUrl = "tcp://voldemort1.idi.ntnu.no:6667";
 
-    public static final int HEADMASTER_SIGAR_LISTENER_PORT = 17777;
-
     private String myHostname;
 
     private ActiveNodeZKListener anzkl;
@@ -59,7 +58,6 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
     private Cluster currentCluster;
     private boolean idle = false;
 
-    private SigarReceiver sigarReceiver;
     private Thread sigarThread;
 
     private String myHeadmaster;
@@ -71,15 +69,14 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
     private ConcurrentHashMap<String, Node> handledNodes;
     private Lock currentClusterLock;
 
-    NodeStatus lowestnode;
+    private StatusAnalyser statAnalyser;
 
     public Headmaster(String zkURL, ActiveNodeZKListener activeNodeZKListener) {
         this(zkURL);
-        SigarReceiver sigarReceiver = new SigarReceiver(Integer.valueOf(Headmaster.HEADMASTER_SIGAR_LISTENER_PORT), this);
-        sigarThread = new Thread(sigarReceiver);
-
         this.anzkl = activeNodeZKListener;
         this.anzkl.addDataListener(this);
+
+        statAnalyser = new StatusAnalyser(this, anzkl);
     }
 
     private Headmaster(String zkURL) {
@@ -98,6 +95,7 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
         currentClusterLock.lock();
         try {
             currentCluster = new ClusterMapper().readCluster(anzkl.getStringFromZooKeeper("/config/cluster.xml", true));
+
         } finally {
             currentClusterLock.unlock();
         }
@@ -115,8 +113,6 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
 
         myHeadmaster = getNodeNameFromPath(zkPath);
         logger.debug("Registered as Headmaster in zookeeper :" + myHeadmaster);
-        sigarThread.start();
-
     }
 
     private String getNodeNameFromPath(String zkPath) {
@@ -152,7 +148,7 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
         return winner;
     }
 
-    public void plan (){
+    public RebalancePlan plan (){
         // make sure of existance so we don't crash in a rebalance
         String sampleServerProperties = anzkl.getStringFromZooKeeper("/config/sample_files/server.properties");
 
@@ -164,9 +160,11 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
         } finally {
             currentClusterLock.unlock();
         }
+
+        return plan;
     }
 
-    public void plan (Cluster cluster){
+    public RebalancePlan plan (Cluster cluster){
         // make sure of existance so we don't crash in a rebalance
         String sampleServerProperties = anzkl.getStringFromZooKeeper("/config/sample_files/server.properties");
 
@@ -177,9 +175,11 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
         } finally {
             currentClusterLock.unlock();
         }
+
+        return plan;
     }
 
-    public void rebalance(){
+    public void rebalance(RebalancePlan plan){
         currentClusterLock.lock();
         try {
             RebalancerZK rzk = new RebalancerZK(zkURL, bootStrapUrl, anzkl);
@@ -215,13 +215,13 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
 
         if (event.getType() == Event.EventType.NodeCreated) {
             if (isHeadmaster() && event.getPath().equals(HEADMASTER_ROOT_PATH + HEADMASTER_REBALANCE_TOKEN)) {
-                plan();
+                RebalancePlan plan = plan();
                 try {
                     Thread.sleep(20000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-                rebalance();
+                rebalance(plan);
             }
         }
     }
@@ -286,6 +286,7 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
             String interimClusterxml = createInterimClusterXML(changeMap);
             currentCluster = new ClusterMapper().readCluster(new StringReader(interimClusterxml));
 
+
             //upload cluster.xml
 
             anzkl.uploadAndUpdateFile("/config/cluster.xml", interimClusterxml);
@@ -300,6 +301,21 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
         } finally {
             currentClusterLock.unlock();
         }
+    }
+
+    public void partitionMoverTrigger(String from_hostname, String to_hostname){
+        Node fromNode = currentCluster.getNodeByHostname(from_hostname);
+        Node toNode = currentCluster.getNodeByHostname(to_hostname);
+
+        Cluster newCluster = moveRandomPartitionInclusterXML(fromNode,toNode);
+
+        RebalancePlan plan = plan(newCluster);
+        try {
+            Thread.sleep(20000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        rebalance(plan);
     }
 
     private Cluster moveRandomPartitionInclusterXML(Node fromNode, Node toNode){
@@ -400,6 +416,8 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
         return sb.toString();
     }
 
+
+
     @Override
     public void dataChanged(String path) {
         logger.info("Path changed: " + path);
@@ -446,10 +464,6 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
     @Override
     public void run() {
         synchronized (this) {
-            if (sigarReceiver != null) {
-                Thread t = new Thread(sigarReceiver);
-                t.start();
-            }
 
             while (true) {
                 // If the flag is set, we're done.
@@ -481,30 +495,6 @@ public class Headmaster implements Runnable, ZKDataListener, StatusMessageListen
 
     public void setMyHeadmaster(String myHeadmaster) {
         this.myHeadmaster = myHeadmaster;
-    }
-
-    @Override
-    public void statusMessage(SigarStatusMessage sigarStatusMessage) {
-
-        if(!isHeadmaster()) {
-            return;
-        }
-        if(lowestnode == null || sigarStatusMessage.getHostname().equals(lowestnode.getHost()) ||
-                sigarStatusMessage.getCPU() < lowestnode.getCpustatus()
-                ) {
-            for(Node node: currentCluster.getNodes()) {
-                if (node.getHost().equals(sigarStatusMessage.getHostname())) {
-                    Integer i = new Integer(node.getId());
-                    logger.info(
-                            "Changing lowest node to hostname:{} value:{}", node.getHost(),
-                            sigarStatusMessage.getCPU()
-                    );
-                    lowestnode = new NodeStatus(node, sigarStatusMessage);
-                }
-            }
-        }
-
-
     }
 
     public static void main(String args[]) {
