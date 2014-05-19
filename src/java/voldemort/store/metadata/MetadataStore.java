@@ -322,7 +322,13 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                 for(StoreDefinition storeDef: storeDefinitions) {
                     specifiedStoreNames.add(storeDef.getName());
                     String storeDefStr = mapper.writeStore(storeDef);
-                    logger.info("Storing store def: {}", storeDefStr);
+
+                    Version orig = this.storeDefinitionsStorageEngine.getVersions(storeDef.getName()).get(0);
+                    logger.info("Storing store def: {}", storeDef.getName());
+                    logger.info("from version: {} to version: {}",
+                            orig.toString(),
+                            value.getVersion());
+                    logger.info("compares: {}", value.getVersion().compare(orig));
                     Versioned<String> versionedValueStr = new Versioned<String>(storeDefStr,
                                                                                 value.getVersion());
                     this.storeDefinitionsStorageEngine.put(storeDef.getName(),
