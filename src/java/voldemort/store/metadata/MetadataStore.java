@@ -58,6 +58,7 @@ import voldemort.store.StoreCapabilityType;
 import voldemort.store.StoreDefinition;
 import voldemort.store.StoreUtils;
 import voldemort.store.configuration.ConfigurationStorageEngine;
+import voldemort.store.configuration.VoldemortZooKeeperException;
 import voldemort.store.configuration.ZooKeeperStorageEngine;
 import voldemort.store.memory.InMemoryStorageEngine;
 import voldemort.store.system.SystemStoreConstants;
@@ -1213,7 +1214,16 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
     }
 
     private void putInner(String key, Versioned<String> value) {
-        innerStore.put(key, value, null);
+        /**
+         * try/catch this put in case we are using a ZooKeeper based innerstore.
+         * This will be thrown when trying to write a new cluster.xml to ZK during a rebalance proxy grace period.
+         * If this happens during any other time, consider it an error.
+         */
+        try {
+            innerStore.put(key, value, null);
+        } catch (VoldemortZooKeeperException e) {
+            logger.error("Persistent metadata put failed", e);
+        }
     }
 
     private Versioned<String> getInnerValue(String key) throws VoldemortException {

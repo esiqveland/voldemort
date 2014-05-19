@@ -160,7 +160,7 @@ public class ZooKeeperStorageEngine extends AbstractStorageEngine<String, String
             for (String invalidKey : MetadataStore.REQUIRED_KEYS) {
 
                 if (key.equals(invalidKey)) {
-                    throw new VoldemortException("Please use ZooKeeper to write new Metadata for data kept in ZooKeeper. Refusing put. " +
+                    throw new VoldemortZooKeeperException("Please use ZooKeeper to write new Metadata for data kept in ZooKeeper. Refusing put. " +
                             "Offending key: " + key);
                 }
 

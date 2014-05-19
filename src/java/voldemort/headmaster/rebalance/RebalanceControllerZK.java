@@ -470,7 +470,7 @@ public class RebalanceControllerZK {
                         batchFinalStoreDefs,
                         rebalanceTaskPlanList,
                         false,
-                        false,
+                        true,
                         true,
                         true,
                         true);
@@ -501,7 +501,7 @@ public class RebalanceControllerZK {
                         batchFinalStoreDefs,
                         rebalanceTaskPlanList,
                         true,
-                        false,
+                        true,
                         false,
                         true,
                         true);
@@ -516,7 +516,7 @@ public class RebalanceControllerZK {
                         batchFinalStoreDefs,
                         rebalanceTaskPlanList,
                         true,
-                        false,
+                        true,
                         true,
                         true,
                         true);
@@ -651,7 +651,7 @@ public class RebalanceControllerZK {
                         batchRollbackStoreDefs,
                         null,
                         true,
-                        false,
+                        true,
                         false,
                         false,
                         false);
@@ -663,7 +663,7 @@ public class RebalanceControllerZK {
                         batchRollbackStoreDefs,
                         null,
                         false,
-                        false,
+                        true,
                         false,
                         false,
                         false);
