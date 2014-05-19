@@ -1284,6 +1284,7 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                             vObject = new Versioned<>(vObject.getValue(), vectorClock);
 
                             //updateRoutingStrategies(getCluster(), (List<StoreDefinition>) vObject.getValue());
+                            metadataCache.put(key, vObject);
                             put(STORES_KEY, vObject);
                         } else if(SYSTEM_STORES_KEY.equals(key)) {
                             throw new VoldemortException("Cannot overwrite system store definitions");
