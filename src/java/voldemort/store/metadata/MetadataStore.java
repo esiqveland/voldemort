@@ -35,13 +35,13 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.management.MBeanOperationInfo;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.data.Stat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import voldemort.VoldemortException;
 import voldemort.annotations.jmx.JmxOperation;
 import voldemort.client.rebalance.RebalanceTaskInfo;
@@ -138,7 +138,7 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
 
     private final ConcurrentHashMap<String, List<MetadataStoreListener>> storeNameTolisteners;
 
-    private static final Logger logger = Logger.getLogger(MetadataStore.class);
+    private static final Logger logger = LoggerFactory.getLogger(MetadataStore.class);
 
     public MetadataStore(Store<String, String, String> innerStore,
                          StorageEngine<String, String, String> storeDefinitionsStorageEngine,
@@ -322,11 +322,14 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                 for(StoreDefinition storeDef: storeDefinitions) {
                     specifiedStoreNames.add(storeDef.getName());
                     String storeDefStr = mapper.writeStore(storeDef);
+                    logger.info("Storing store def: {}", storeDefStr);
                     Versioned<String> versionedValueStr = new Versioned<String>(storeDefStr,
                                                                                 value.getVersion());
                     this.storeDefinitionsStorageEngine.put(storeDef.getName(),
                                                            versionedValueStr,
                                                            "");
+
+                    logger.info("updating metadata cache key: {}", storeDef.getName());
 
                     // Update the metadata cache
                     this.metadataCache.put(storeDef.getName(),
@@ -338,9 +341,11 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                     resetStoreDefinitions(storeNamesToDelete);
                 }
 
+                logger.info("init store definitions");
                 // Re-initialize the store definitions
                 initStoreDefinitions(value.getVersion());
 
+                logger.info("update routing strategies");
                 // Update routing strategies
                 updateRoutingStrategies(getCluster(), getStoreDefList());
 
@@ -746,8 +751,7 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                             listener.updateStoreDefinition(storeDefMap.get(storeName));
                         }
                     } catch(Exception e) {
-                        if(logger.isEnabledFor(Level.WARN))
-                            logger.warn(e, e);
+                        logger.warn("error updating routing strategies", e);
                     }
                 }
 
