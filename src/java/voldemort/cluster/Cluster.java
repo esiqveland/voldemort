@@ -389,4 +389,13 @@ public class Cluster implements Serializable {
 
         return hc;
     }
+
+    public Node getNodeByHostname(String hostname){
+        for(Node node : getNodes()){
+            if ( node.getHost().equals(hostname) ) {
+                return node;
+            }
+        }
+        throw new VoldemortException("No such node in cluster: " + hostname);
+    }
 }
