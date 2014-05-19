@@ -44,7 +44,7 @@ public class Headmaster implements Runnable, ZKDataListener {
     public static final String ACTIVEPATH = "/active";
 
     public static final String defaultUrl = "voldemort1.idi.ntnu.no:2181/hjemmekontor";
-    public static final String bootStrapUrl = "tcp://voldemort1.idi.ntnu.no:6667";
+    public String adminUrl;
 
     private String myHostname;
 
@@ -99,8 +99,10 @@ public class Headmaster implements Runnable, ZKDataListener {
         //Seed childrenListChanged method with initial children list
         childrenList(ACTIVEPATH);
 
-
-
+        if(currentCluster.getNumberOfNodes() != 0) {
+            adminUrl = "tcp://" + currentCluster.getNodeById(0).getHost();
+            adminUrl += ":" + currentCluster.getNodeById(0).getAdminPort();
+        }
     }
 
     public void registerAsHeadmaster(){
@@ -178,7 +180,7 @@ public class Headmaster implements Runnable, ZKDataListener {
     public void rebalance(RebalancePlan plan){
         currentClusterLock.lock();
         try {
-            RebalancerZK rzk = new RebalancerZK(zkURL, bootStrapUrl, anzkl);
+            RebalancerZK rzk = new RebalancerZK(zkURL, adminUrl, anzkl);
             if (plan != null) {
                 rzk.rebalance(plan);
             } else {

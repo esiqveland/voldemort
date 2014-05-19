@@ -378,7 +378,7 @@ public class AdminClient {
             // try to bootstrap metadata from bootstrapUrl
             config.setBootstrapUrls(bootstrapURL);
             SocketStoreClientFactory factory = new SocketStoreClientFactory(config);
-            // get Cluster from bootStrapUrl
+            // get Cluster from adminUrl
             String clusterXml = factory.bootstrapMetadataWithRetries(MetadataStore.CLUSTER_KEY,
                                                                      factory.validateUrls(config.getBootstrapUrls()));
             // release all threads/sockets hold by the factory.
