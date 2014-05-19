@@ -127,17 +127,22 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
         for (LinkedList<SigarStatusMessage> node_messages : messagesFromNodes.values()){
             double avgCpu = getAvgCPU(node_messages);
             if (avgCpu > CPU_THRESHHOLD) {
-                logger.debug("Node: {} is struggling with AVGCPU: {}! ", node_messages.getFirst().getHostname(), avgCpu);
+                String strugglingHost = node_messages.getFirst().getHostname();
+                logger.debug("Node: {} is struggling with AVGCPU: {}! ", strugglingHost, avgCpu);
 
                 String calm_node = getCalmestNode();
                 double calmCPU = getAvgCPU(calm_node);
 
                 if (calmCPU < 70) {
-                    logger.debug("Initiating partition move from {} to {}",calm_node, node_messages.getFirst());
+                    if (calm_node.equals(strugglingHost)){
+                        logger.debug("Sanitycheck failed: Calm node is same as struggling");
+                        return;
+                    }
+                    logger.debug("Initiating partition move from {} to {}",calm_node, strugglingHost);
                     if (!performingOperation){
                         performingOperation = true;
                         try {
-                            headmaster.partitionMoverTrigger(getCalmestNode(), node_messages.getLast().getHostname());
+                            headmaster.partitionMoverTrigger(getCalmestNode(), strugglingHost);
                         } catch (Exception e){
                             logger.error("Error while moving partition",e);
                         }
