@@ -481,20 +481,12 @@ public class Headmaster implements Runnable, ZKDataListener {
         }
     }
 
-    public void setAnzkl(ActiveNodeZKListener anzkl) {
-        this.anzkl = anzkl;
-    }
-
     public String getMyHeadmaster() {
         return myHeadmaster;
     }
 
     public String getCurrentHeadmaster() {
         return currentHeadmaster;
-    }
-
-    public void setMyHeadmaster(String myHeadmaster) {
-        this.myHeadmaster = myHeadmaster;
     }
 
     public static void main(String args[]) {
