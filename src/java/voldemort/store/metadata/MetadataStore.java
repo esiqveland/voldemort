@@ -1268,10 +1268,7 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
 
                         Versioned<String> versioned = innerStore.get(key, null).get(0);
 
-                        VectorClock vectorClock = ((VectorClock) versioned.getVersion()).incremented(getNodeId(), System.currentTimeMillis());
-                        Versioned<String> newVersioned = new Versioned<>(versioned.getValue(), vectorClock);
-
-                        Versioned<Object> vObject = convertStringToObject(key, newVersioned);
+                        Versioned<Object> vObject = convertStringToObject(key, versioned);
 
 
 
@@ -1279,6 +1276,13 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                             updateRoutingStrategies((Cluster) vObject.getValue(), getStoreDefList());
                             metadataCache.put(key, vObject);
                         } else if (key.equals(STORES_KEY)) {
+                            Versioned<Object> currentStore = metadataCache.get(STORES_KEY);
+
+                            // this is cumbersome, but we must retain vectorclock for our node.
+                            // otherwise, rebalances break.
+                            VectorClock vectorClock = ((VectorClock) currentStore.getVersion()).incremented(getNodeId(), System.currentTimeMillis());
+                            vObject = new Versioned<>(vObject.getValue(), vectorClock);
+
                             //updateRoutingStrategies(getCluster(), (List<StoreDefinition>) vObject.getValue());
                             put(STORES_KEY, vObject);
                         } else if(SYSTEM_STORES_KEY.equals(key)) {
