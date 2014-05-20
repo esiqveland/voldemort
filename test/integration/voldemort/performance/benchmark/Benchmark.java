@@ -26,6 +26,9 @@ import java.util.concurrent.TimeUnit;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeUtils;
+import org.joda.time.format.DateTimeFormat;
 import voldemort.ServerTestUtils;
 import voldemort.StaticStoreClientFactory;
 import voldemort.TestUtils;
@@ -159,10 +162,12 @@ public class Benchmark {
                 }
 
                 if(totalOps != 0 && totalOps != prevTotalOps) {
+                    Long time = System.currentTimeMillis();
+                    System.out.println(DateTimeFormat.forPattern("HH:mm:ss.SSS").print(new DateTime(time)));
                     System.out.println("[status]\tThroughput(ops/sec): "
-                                       + Time.MS_PER_SECOND
-                                       * ((double) totalOps / (double) (System.currentTimeMillis() - startTime))
-                                       + "\tOperations: " + totalOps);
+                            + Time.MS_PER_SECOND
+                            * ((double) totalOps / (double) (System.currentTimeMillis() - startTime))
+                            + "\tOperations: " + totalOps);
                     Metrics.getInstance().printReport(System.out);
                 }
                 prevTotalOps = totalOps;
