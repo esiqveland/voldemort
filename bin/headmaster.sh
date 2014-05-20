@@ -18,5 +18,7 @@
 
 base_dir=$(dirname $0)/..
 
+LOG4JPROPERTIES=" -Dlog4j.configuration=file://$base_dir/src/java/log4j.headmaster.properties "
+
 $base_dir/bin/run-class.sh voldemort.headmaster.Headmaster $@
 
