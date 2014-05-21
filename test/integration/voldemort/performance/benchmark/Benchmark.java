@@ -151,6 +151,7 @@ public class Benchmark {
         public void run() {
             boolean testComplete = true;
             int totalOps = 0, prevTotalOps = 0;
+            long lastinterval = System.currentTimeMillis();
             do {
                 testComplete = true;
                 totalOps = 0;
@@ -161,15 +162,22 @@ public class Benchmark {
                     totalOps += ((ClientThread) thread).getOpsDone();
                 }
 
+                Long time = System.currentTimeMillis();
                 if(totalOps != 0 && totalOps != prevTotalOps) {
-                    Long time = System.currentTimeMillis();
                     System.out.println(DateTimeFormat.forPattern("HH:mm:ss.SSS").print(new DateTime(time)));
-                    System.out.println("[status]\tThroughput(ops/sec): "
+
+                    System.out.println("[status]\tThroughput(ops/sec) last "+intervalSec+" seconds: "
                             + Time.MS_PER_SECOND
-                            * ((double) totalOps / (double) (System.currentTimeMillis() - startTime))
+                            * ((double) (totalOps-prevTotalOps) / (double) (time - lastinterval))
+                            + "\tOperations: " + (totalOps-prevTotalOps));
+
+                    System.out.println("[status]\tThroughput(ops/sec) AVG: "
+                            + Time.MS_PER_SECOND
+                            * ((double) totalOps / (double) (time - startTime))
                             + "\tOperations: " + totalOps);
                     Metrics.getInstance().printReport(System.out);
                 }
+                lastinterval = time;
                 prevTotalOps = totalOps;
                 try {
                     sleep(intervalSec * Time.MS_PER_SECOND);
