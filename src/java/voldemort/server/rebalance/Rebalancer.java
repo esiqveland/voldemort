@@ -21,9 +21,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.log4j.Logger;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import voldemort.VoldemortException;
 import voldemort.client.rebalance.RebalanceTaskInfo;
 import voldemort.cluster.Cluster;
@@ -51,7 +50,7 @@ import com.google.common.collect.Lists;
  */
 public class Rebalancer implements Runnable {
 
-    private final static Logger logger = LoggerFactory.getLogger(Rebalancer.class);
+    private final static Logger logger = Logger.getLogger(Rebalancer.class);
 
     private final MetadataStore metadataStore;
     private final AsyncOperationService asyncService;
@@ -396,14 +395,11 @@ public class Rebalancer implements Runnable {
 
             // now put new stores
             logger.info("put cluster");
-            logger.info("clock before: {}", ((VectorClock) metadataStore.get(storesKey, null)
-                    .get(0)
-                    .getVersion()));
             updatedVectorClock = ((VectorClock) metadataStore.get(storesKey, null)
                                                              .get(0)
                                                              .getVersion()).incremented(metadataStore.getNodeId(),
                                                                                         System.currentTimeMillis());
-            logger.info("updated vectorclock: {}", updatedVectorClock);
+            logger.info("update clock");
             metadataStore.put(storesKey, Versioned.value((Object) storeDefs, updatedVectorClock));
             logger.info("done store put");
 
