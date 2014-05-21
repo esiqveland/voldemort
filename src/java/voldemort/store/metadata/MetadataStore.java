@@ -49,6 +49,7 @@ import voldemort.cluster.Cluster;
 import voldemort.routing.RouteToAllStrategy;
 import voldemort.routing.RoutingStrategy;
 import voldemort.routing.RoutingStrategyFactory;
+import voldemort.server.VoldemortConfig;
 import voldemort.server.VoldemortZooKeeperConfig;
 import voldemort.server.rebalance.RebalancerState;
 import voldemort.store.AbstractStorageEngine;
@@ -558,7 +559,12 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                                       getVersions(new ByteArray(ByteUtils.getBytes(key, "UTF-8"))).get(0));
             }
 
-            init(getNodeId());
+            if (innerStore instanceof ZooKeeperStorageEngine) {
+                init(getNodeId(), true);
+            } else {
+                init(getNodeId(), false);
+            }
+
         } finally {
             writeLock.unlock();
         }
@@ -966,15 +972,22 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
         }
     }
 
+    private void init(int nodeId) {
+        init(nodeId, false);
+    }
     /**
      * Initializes the metadataCache for MetadataStore
      */
-    private void init(int nodeId) {
+    private void init(int nodeId, boolean isRebalancingWithZooKeeper) {
         logger.info("metadata init().");
 
         writeLock.lock();
-        // Required keys
-        initCache(CLUSTER_KEY);
+
+        // do not reread cluster key from ZooKeeper, as this is not written yet
+        if (!isRebalancingWithZooKeeper) {
+            // Required keys
+            initCache(CLUSTER_KEY);
+        }
 
         // If stores definition storage engine is not null, initialize metadata
         // Add the mapping from key to the storage engine used
