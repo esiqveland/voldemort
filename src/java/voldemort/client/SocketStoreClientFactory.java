@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.lang.StringUtils;
 import voldemort.VoldemortException;
 import voldemort.client.protocol.RequestFormatType;
 import voldemort.cluster.Cluster;
@@ -41,7 +40,6 @@ import voldemort.store.socket.clientrequest.ClientRequestExecutorPool;
 import voldemort.store.system.SystemStoreConstants;
 import voldemort.utils.ByteArray;
 import voldemort.versioning.InconsistencyResolver;
-import voldemort.versioning.Version;
 import voldemort.versioning.Versioned;
 
 /**
@@ -96,14 +94,7 @@ public class SocketStoreClientFactory extends AbstractStoreClientFactory {
     @Override
     protected List<Versioned<String>> getRemoteMetadata(String key, URI url) {
         try {
-            logger.info("getting remote metadata key: " + key);
-
-            List<Versioned<String>> obj = super.getRemoteMetadata(key, url);
-
-            for (Versioned<String> versioned : obj) {
-                logger.info("got remote metdata: " + versioned.getValue());
-            }
-            return obj;
+            return super.getRemoteMetadata(key, url);
         } catch(VoldemortException e) {
             // Fix SNA-4227: When an error occurs during bootstrap, close the
             // socket
