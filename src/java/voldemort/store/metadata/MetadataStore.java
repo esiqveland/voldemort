@@ -360,6 +360,9 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                 putInner(key, convertObjectToString(key, value));
 
                 // cache all keys if innerStore put succeeded
+                if (key.equals(CLUSTER_KEY)) {
+                    logger.info("putting {} in cache", CLUSTER_KEY);
+                }
                 metadataCache.put(key, value);
 
                 // do special stuff if needed

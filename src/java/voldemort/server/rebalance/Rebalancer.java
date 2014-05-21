@@ -39,6 +39,7 @@ import voldemort.versioning.VectorClock;
 import voldemort.versioning.Versioned;
 
 import com.google.common.collect.Lists;
+import voldemort.xml.ClusterMapper;
 
 /**
  * Service responsible for rebalancing
@@ -391,7 +392,8 @@ public class Rebalancer implements Runnable {
                                                                          .get(0)
                                                                          .getVersion()).incremented(metadataStore.getNodeId(),
                                                                                                     System.currentTimeMillis());
-            logger.info("Got clock");
+            logger.info("Got clock, putting cluster: {}", new ClusterMapper().writeCluster(cluster));
+
             metadataStore.put(clusterKey, Versioned.value((Object) cluster, updatedVectorClock));
 
             // now put new stores
