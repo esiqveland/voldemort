@@ -12,7 +12,8 @@ import voldemort.cluster.Cluster;
 import voldemort.cluster.Node;
 import voldemort.headmaster.rebalance.RebalancePlannerZK;
 import voldemort.headmaster.rebalance.RebalancerZK;
-import voldemort.headmaster.status.StatusAnalyser;
+import voldemort.headmaster.status.RebalanceStrategy;
+import voldemort.headmaster.status.StatusAnalyzer;
 import voldemort.server.VoldemortConfig;
 
 
@@ -56,8 +57,6 @@ public class Headmaster implements Runnable, ZKDataListener {
     private Cluster currentCluster;
     private boolean idle = false;
 
-    private Thread sigarThread;
-
     private String myHeadmaster;
 
 
@@ -67,22 +66,22 @@ public class Headmaster implements Runnable, ZKDataListener {
     private ConcurrentHashMap<String, Node> handledNodes;
     private Lock currentClusterLock;
 
-    private StatusAnalyser statAnalyser;
+    private StatusAnalyzer statAnalyser;
 
     public Headmaster(String zkURL, ActiveNodeZKListener activeNodeZKListener) {
         this(zkURL);
         this.anzkl = activeNodeZKListener;
         this.anzkl.addDataListener(this);
 
-        statAnalyser = new StatusAnalyser(this, anzkl);
+        statAnalyser = new StatusAnalyzer(this, anzkl);
 
     }
 
     private Headmaster(String zkURL) {
-       this.zkURL = zkURL;
-       currentClusterLock = new ReentrantLock();
-       handledNodes = new ConcurrentHashMap<>();
-       try {
+        this.zkURL = zkURL;
+        currentClusterLock = new ReentrantLock();
+        handledNodes = new ConcurrentHashMap<>();
+        try {
             myHostname = InetAddress.getLocalHost().getCanonicalHostName().toString();
         } catch (UnknownHostException e) {
             e.printStackTrace();
@@ -98,11 +97,11 @@ public class Headmaster implements Runnable, ZKDataListener {
         } finally {
             currentClusterLock.unlock();
         }
-        anzkl.setWatch(HEADMASTER_ROOT_PATH+HEADMASTER_REBALANCE_TOKEN);
+        anzkl.setWatch(HEADMASTER_ROOT_PATH + HEADMASTER_REBALANCE_TOKEN);
         //Seed childrenListChanged method with initial children list
         childrenList(ACTIVEPATH);
 
-        if(currentCluster.getNumberOfNodes() != 0) {
+        if (currentCluster.getNumberOfNodes() != 0) {
             adminUrl = "tcp://" + currentCluster.getNodeById(0).getHost();
             adminUrl += ":" + currentCluster.getNodeById(0).getAdminPort();
 
@@ -111,9 +110,9 @@ public class Headmaster implements Runnable, ZKDataListener {
 
     }
 
-    public void registerAsHeadmaster(){
+    public void registerAsHeadmaster() {
         String zkPath = anzkl.uploadAndUpdateFileWithMode(
-                HEADMASTER_ROOT_PATH + HEADMASTER_ELECTION_PATH, myHostname+":"+HEADMASTER_SIGAR_LISTENER_PORT, CreateMode.EPHEMERAL_SEQUENTIAL);
+                HEADMASTER_ROOT_PATH + HEADMASTER_ELECTION_PATH, myHostname + ":" + HEADMASTER_SIGAR_LISTENER_PORT, CreateMode.EPHEMERAL_SEQUENTIAL);
 
         myHeadmaster = getNodeNameFromPath(zkPath);
         logger.debug("Registered as Headmaster in zookeeper :" + myHeadmaster);
@@ -124,12 +123,12 @@ public class Headmaster implements Runnable, ZKDataListener {
         return split[split.length - 1];
     }
 
-    public boolean isHeadmaster(){
+    public boolean isHeadmaster() {
         return myHeadmaster.equals(currentHeadmaster);
 
     }
 
-    private String leaderElection(){
+    private String leaderElection() {
         List<String> headmasters = anzkl.getChildrenList(HEADMASTER_ROOT_PATH);
 
         //determine who is supposed to be leader
@@ -145,14 +144,14 @@ public class Headmaster implements Runnable, ZKDataListener {
         }
 
         currentHeadmaster = winner;
-        if (!winner.equals(myHeadmaster)){
-            logger.debug("I did not win, setting watch on winner: " + HEADMASTER_ROOT_PATH+"/"+currentHeadmaster);
+        if (!winner.equals(myHeadmaster)) {
+            logger.debug("I did not win, setting watch on winner: " + HEADMASTER_ROOT_PATH + "/" + currentHeadmaster);
             anzkl.setWatch(HEADMASTER_ROOT_PATH + "/" + currentHeadmaster);
         }
         return winner;
     }
 
-    public RebalancePlan plan (){
+    public RebalancePlan plan() {
         // make sure of existance so we don't crash in a rebalance
         String sampleServerProperties = anzkl.getStringFromZooKeeper("/config/sample_files/server.properties");
 
@@ -168,9 +167,7 @@ public class Headmaster implements Runnable, ZKDataListener {
         return plan;
     }
 
-    public RebalancePlan plan (Cluster cluster){
-        // make sure of existance so we don't crash in a rebalance
-        String sampleServerProperties = anzkl.getStringFromZooKeeper("/config/sample_files/server.properties");
+    public RebalancePlan plan(Cluster cluster) {
 
         currentClusterLock.lock();
         try {
@@ -183,7 +180,7 @@ public class Headmaster implements Runnable, ZKDataListener {
         return plan;
     }
 
-    public void rebalance(RebalancePlan plan){
+    public void rebalance(RebalancePlan plan) {
         currentClusterLock.lock();
         try {
             RebalancerZK rzk = new RebalancerZK(zkURL, adminUrl, anzkl);
@@ -204,7 +201,7 @@ public class Headmaster implements Runnable, ZKDataListener {
         leaderElection();
 
 
-        if(isHeadmaster()) {
+        if (isHeadmaster()) {
             beHeadmaster();
         }
     }
@@ -230,20 +227,20 @@ public class Headmaster implements Runnable, ZKDataListener {
         }
     }
 
-    private Node locateNewChildAndHandOutId(String child){
+    private Node locateNewChildAndHandOutId(String child) {
         String id = anzkl.getStringFromZooKeeper("/active/" + child);
 
-        if (id.equals(VoldemortConfig.NEW_ACTIVE_NODE_STRING)){
+        if (id.equals(VoldemortConfig.NEW_ACTIVE_NODE_STRING)) {
             for (Node node : currentCluster.getNodes()) {
 
-                if (node.getHost().equals(child) && !handledNodes.containsKey(child)){
+                if (node.getHost().equals(child) && !handledNodes.containsKey(child)) {
                     logger.info("existing node with NEW in active: " + child + " node: " + node);
                     return node;
                 }
             }
             int newId = currentCluster.getNumberOfNodes();
 
-            Node newNode = new Node(newId, child, DEFAULT_HTTP_PORT, DEFAULT_SOCKET_PORT,DEFAULT_ADMIN_PORT,new ArrayList<Integer>());
+            Node newNode = new Node(newId, child, DEFAULT_HTTP_PORT, DEFAULT_SOCKET_PORT, DEFAULT_ADMIN_PORT, new ArrayList<Integer>());
             logger.info("New node regisering: + " + child + " : " + newId);
             return newNode;
         }
@@ -254,10 +251,10 @@ public class Headmaster implements Runnable, ZKDataListener {
     @Override
     public synchronized void childrenList(String path) {
 
-        if(!isHeadmaster())
+        if (!isHeadmaster())
             return;
 
-        if(!path.startsWith(ACTIVEPATH)){
+        if (!path.startsWith(ACTIVEPATH)) {
             //This message is for someone else
             return;
         }
@@ -267,18 +264,18 @@ public class Headmaster implements Runnable, ZKDataListener {
 
             List<String> children = anzkl.getChildrenList(path, true);
 
-            HashMap<String,Node> changeMap = new HashMap<>();
+            HashMap<String, Node> changeMap = new HashMap<>();
 
-            if(children.isEmpty()) {
+            if (children.isEmpty()) {
                 logger.debug("Last node left {}", ACTIVEPATH);
                 return;
             }
             String members = Strings.join(children, " ");
 
             logger.info("{} members: {}", ACTIVEPATH, members);
-            for (String child : children){
+            for (String child : children) {
                 Node newNode = locateNewChildAndHandOutId(child);
-                if ( newNode != null ){
+                if (newNode != null) {
                     changeMap.put(child, newNode);
                 }
 
@@ -296,83 +293,55 @@ public class Headmaster implements Runnable, ZKDataListener {
             anzkl.uploadAndUpdateFile("/config/cluster.xml", interimClusterxml);
 
             //create node in nodes and upload server.properties
-            for (Node node : changeMap.values()){
+            for (Node node : changeMap.values()) {
                 String serverProp = createServerProperties(node);
                 anzkl.uploadAndUpdateFile("/config/nodes/" + node.getHost(), "");
                 anzkl.uploadAndUpdateFile("/config/nodes/" + node.getHost() + "/server.properties", serverProp);
-                handledNodes.put(node.getHost(),node);
+                handledNodes.put(node.getHost(), node);
             }
         } finally {
             currentClusterLock.unlock();
         }
     }
 
-    public void partitionMoverTrigger(String from_hostname, String to_hostname){
-        Node fromNode = currentCluster.getNodeByHostname(from_hostname);
-        Node toNode = currentCluster.getNodeByHostname(to_hostname);
 
-        Cluster newCluster = moveRandomPartitionInclusterXML(fromNode,toNode);
 
-        RebalancePlan plan = plan(newCluster);
+    public void partitionMoverTrigger(List<String> strugglingNodes, String calmNode, RebalanceStrategy rebalanceStrategy) {
+
+        Node toNode = currentCluster.getNodeByHostname(calmNode);
+
+        List<Node> fromNodes = Lists.newArrayList();
+        for(String strugglingNode : strugglingNodes){
+            fromNodes.add(currentCluster.getNodeByHostname(strugglingNode));
+        }
+
+        Cluster newCluster = null;
+        switch (rebalanceStrategy){
+            case PICK_ONE_RANDOM:
+                List<Node> tempNodes = Lists.newArrayList(fromNodes.get(RandomUtils.nextInt(fromNodes.size())));
+                newCluster = PartitionMovePlanner.movePartitonsInClusterObject(tempNodes, toNode, currentCluster);
+                break;
+            case ALL_STRUGGLING_SAME_TIME:
+                newCluster = PartitionMovePlanner.movePartitonsInClusterObject(fromNodes, toNode, currentCluster);
+                break;
+        }
+
+        if(newCluster!= null){
+            RebalancePlan plan = plan(newCluster);
+        }
+
         try {
-            Thread.sleep(20000);
+            Thread.sleep(10000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
         rebalance(plan);
     }
 
-    private Cluster moveRandomPartitionInclusterXML(Node fromNode, Node toNode){
-        Cluster tempCluster = Cluster.cloneCluster(currentCluster);
-        int stealPartitionId = 0;
 
-        //Find partition to steal
-        for(Node node : tempCluster.getNodes()){
-            if(fromNode.getId() == node.getId()){
-                //pick one partition and remove it from giver node
-                if (!node.getPartitionIds().isEmpty()){
-                    int randomPartionPosition = RandomUtils.nextInt(node.getNumberOfPartitions());
-                    stealPartitionId = node.getPartitionIds().get(randomPartionPosition);
 
-                    //Create new partitionlist
-                    List partitions = Lists.newArrayList(node.getPartitionIds());
-                    partitions.remove(randomPartionPosition);
 
-                    //Create new node with one less partition
-                    fromNode = new Node(node.getId(),node.getHost(),node.getHttpPort(),node.getSocketPort(),node.getAdminPort(),node.getZoneId(),partitions);
-                }
-            }
-        }
-        //Give partition
-        for(Node node : tempCluster.getNodes()){
-            if(toNode.getId() == node.getId()){
-                //Create new partitionlist
-                List partitions = Lists.newArrayList(node.getPartitionIds());
-                partitions.add(stealPartitionId);
 
-                //Create new node with one less partition
-                toNode = new Node(node.getId(),node.getHost(),node.getHttpPort(),node.getSocketPort(),node.getAdminPort(),node.getZoneId(),partitions);
-            }
-        }
-        List<Node> tempNodes = Lists.newArrayList(currentCluster.getNodes());
-        List<Node> finalNodes = Lists.newArrayList();
-
-        //Create new list of nodes
-        for(Node node : tempNodes){
-            if(node.getId() == fromNode.getId()){
-                finalNodes.add(fromNode);
-            } else if (node.getId() == toNode.getId()){
-                finalNodes.add(toNode);
-            } else {
-                finalNodes.add(node);
-            }
-        }
-
-        //Create new cluster
-        Cluster newCluster = new Cluster(currentCluster.getName(), finalNodes);
-
-        return newCluster;
-    }
 
     private String createInterimClusterXML(HashMap<String,Node> map) {
         Collection nodeCollection = currentCluster.getNodes();
