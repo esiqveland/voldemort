@@ -1,5 +1,7 @@
 package voldemort.headmaster.rebalance;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import voldemort.client.rebalance.RebalancePlan;
 import voldemort.cluster.Cluster;
 import voldemort.cluster.Node;
@@ -14,6 +16,8 @@ import java.io.StringReader;
 import java.util.List;
 
 public class RebalancerZK {
+
+    private static final Logger logger = LoggerFactory.getLogger(RebalancerZK.class);
 
     private String bootstrapUrl;
     private String zkUrl;
@@ -65,6 +69,7 @@ public class RebalancerZK {
 
         if(failure){
             //Issue rollback of cluster.xml
+            logger.error("Rebalance failed. Rolling back");
             zkHandler.uploadAndUpdateFile("/config/cluster.xml", new ClusterMapper().writeCluster(plan.getCurrentCluster()));
             zkHandler.uploadAndUpdateFile("/config/stores.xml", new StoreDefinitionsMapper().writeStoreList(finalStoreDefs));
 
@@ -73,8 +78,8 @@ public class RebalancerZK {
                 zkHandler.uploadAndUpdateFile("/config/nodes/"+nodes.getHost()+"/server.state", MetadataStore.VoldemortState.NORMAL_SERVER.toString());
             }
         } else {
+            logger.info("Rebalance successful");
             zkHandler.uploadAndUpdateFile("/config/cluster.xml",new ClusterMapper().writeCluster(finalCluster));
-            zkHandler.uploadAndUpdateFile("/config/stores.xml",new StoreDefinitionsMapper().writeStoreList(finalStoreDefs));
         }
     }
 
