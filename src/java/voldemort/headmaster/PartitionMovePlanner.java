@@ -2,7 +2,6 @@ package voldemort.headmaster;
 
 import com.google.common.collect.Lists;
 import org.apache.commons.lang.math.RandomUtils;
-import org.apache.hadoop.util.StringUtils;
 import voldemort.cluster.Cluster;
 import voldemort.cluster.Node;
 
