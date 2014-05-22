@@ -1,5 +1,6 @@
 package voldemort.headmaster.status;
 
+import com.google.common.collect.Lists;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import voldemort.headmaster.ActiveNodeZKListener;
@@ -15,9 +16,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 
-public class StatusAnalyser implements StatusMessageListener, Runnable{
+public class StatusAnalyzer implements StatusMessageListener, Runnable{
 
-    private static final Logger logger = LoggerFactory.getLogger(StatusAnalyser.class);
+    private static final Logger logger = LoggerFactory.getLogger(StatusAnalyzer.class);
     public static final double CPU_THRESHHOLD = 0.80;
     public static final int NODE_ID_ALL = -1;
 
@@ -27,6 +28,7 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
     private Thread sigarThread;
     private boolean performingOperation;
     private RepairJobRunner repairJobRunner;
+    private RebalanceStrategy rebalanceStrategy = RebalanceStrategy.PICK_ONE_RANDOM;
 
     private AdminToolZK adminToolZK;
 
@@ -34,7 +36,7 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
     private ScheduledExecutorService scheduler;
 
 
-    public StatusAnalyser(Headmaster headmaster, ActiveNodeZKListener anzkl) {
+    public StatusAnalyzer(Headmaster headmaster, ActiveNodeZKListener anzkl) {
 
         messagesFromNodes = new HashMap<>();
         performingOperation = false;
@@ -122,41 +124,56 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
         return lowestHostname;
     }
 
-    private void analyseCPU (){
-        logger.info("Performing cluster analysis");
-        for (LinkedList<SigarStatusMessage> node_messages : messagesFromNodes.values()){
-            double avgCpu = getAvgCPU(node_messages);
-            if (avgCpu > CPU_THRESHHOLD) {
-                String strugglingHost = node_messages.getFirst().getHostname();
-                logger.debug("Node: {} is struggling with AVGCPU: {}! ", strugglingHost, avgCpu);
 
-                String calm_node = getCalmestNode();
-                double calmCPU = getAvgCPU(calm_node);
 
-                if (calmCPU < 70) {
-                    if (calm_node.equals(strugglingHost)){
-                        logger.debug("Sanitycheck failed: Calm node is same as struggling");
-                        return;
-                    }
-                    logger.debug("Initiating partition move from {} to {}",strugglingHost,calm_node);
-                    if (!performingOperation){
-                        performingOperation = true;
-                        try {
-                            headmaster.partitionMoverTrigger(strugglingHost,getCalmestNode());
-                        } catch (Exception e){
-                            logger.error("Error while moving partition",e);
-                        }
-                    }
-                    performingOperation = false;
+    private void migratePartitions(List<String> strugglingNodes) {
+        if (!strugglingNodes.isEmpty()) {
+            String calm_node = getCalmestNode();
+            double calmCPU = getAvgCPU(calm_node);
+
+            if (calmCPU < 70) {
+                if (strugglingNodes.contains(calm_node)) {
+                    logger.debug("Sanitycheck failed: Calm node is in set of struggling nodes");
+                    return;
                 }
+                if (!performingOperation) {
+                    performingOperation = true;
+                    try {
+                        headmaster.partitionMoverTrigger(strugglingNodes, calm_node, rebalanceStrategy);
+                        Thread.sleep(30000);
 
+                        performingOperation = false;
+                    } catch (Exception e) {
+                        logger.error("Error while moving partition", e);
+                    }
+                }
+                performingOperation = false;
             }
         }
     }
 
+    private void analyzeCPU2() {
+
+        List<String> strugglingNodes = Lists.newArrayList();
+
+        for (LinkedList<SigarStatusMessage> node_messages : messagesFromNodes.values()){
+            double avgCpu = getAvgCPU(node_messages);
+            if (avgCpu > CPU_THRESHHOLD) {
+                strugglingNodes.add(node_messages.getFirst().getHostname());
+            }
+        }
+
+        if(!strugglingNodes.isEmpty()){
+            migratePartitions(strugglingNodes);
+        }
+
+
+    }
+
+
     @Override
     public void run() {
-        analyseCPU();
+        analyzeCPU2();
     }
 
     public void stop() {
@@ -164,8 +181,8 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
     }
 
     public void start() {
-        scheduler.scheduleAtFixedRate(this,45,60, TimeUnit.SECONDS);
-        scheduler.scheduleAtFixedRate(repairJobRunner, 10, 60*60, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this, 30, 30, TimeUnit.SECONDS);
+//        scheduler.scheduleAtFixedRate(repairJobRunner, 10, 60*60, TimeUnit.SECONDS);
     }
 
     private class RepairJobRunner implements Runnable {
@@ -176,4 +193,6 @@ public class StatusAnalyser implements StatusMessageListener, Runnable{
             adminToolZK.repairJob(NODE_ID_ALL);
         }
     }
+
+
 }
