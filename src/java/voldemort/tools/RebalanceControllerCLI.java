@@ -182,12 +182,14 @@ public class RebalanceControllerCLI {
             outputDir = (String) options.valueOf("output-dir");
         }
 
+        RebalancePlan rebalancePlan = new RebalancePlan(currentCluster,
+                currentStoreDefs,
+                finalCluster,
+                finalStoreDefs,
+                batchSize,
+                outputDir);
+
         // Plan & execute rebalancing.
-        rebalanceController.rebalance(new RebalancePlan(currentCluster,
-                                                        currentStoreDefs,
-                                                        finalCluster,
-                                                        finalStoreDefs,
-                                                        batchSize,
-                                                        outputDir));
+        rebalanceController.rebalance(rebalancePlan);
     }
 }
