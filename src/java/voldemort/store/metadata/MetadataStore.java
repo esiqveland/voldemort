@@ -1304,7 +1304,7 @@ public class MetadataStore extends AbstractStorageEngine<ByteArray, byte[], byte
                     }
                 }
             }
-        } catch (VoldemortException e) {
+        } catch (Exception e) {
             logger.info("failed watching/processing key: " + event.getPath());
             throw new VoldemortException("failed watching/processing event key: " + event.getPath(), e);
         }
