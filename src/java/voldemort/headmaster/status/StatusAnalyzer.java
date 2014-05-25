@@ -21,6 +21,7 @@ public class StatusAnalyzer implements StatusMessageListener, Runnable{
     private static final Logger logger = LoggerFactory.getLogger(StatusAnalyzer.class);
     public static final double CPU_THRESHHOLD = 0.80;
     public static final int NODE_ID_ALL = -1;
+    private static final double CALM_NODE = 0.70;
 
     private Headmaster headmaster;
     private SigarReceiver sigarReceiver;
@@ -133,7 +134,8 @@ public class StatusAnalyzer implements StatusMessageListener, Runnable{
 
             logger.info("calmest node: {} CPU: {}", calm_node, calmCPU);
 
-            if (calmCPU < 70) {
+            if (calmCPU < CALM_NODE) {
+
                 if (strugglingNodes.contains(calm_node)) {
                     logger.debug("Sanitycheck failed: Calm node is in set of struggling nodes");
                     return;
@@ -150,7 +152,13 @@ public class StatusAnalyzer implements StatusMessageListener, Runnable{
                     }
                 }
                 performingOperation = false;
+            } else {
+                logger.debug("{} nodes struggling but no calm node found... ", strugglingNodes.size());
             }
+
+
+
+
         }
     }
 
@@ -183,7 +191,7 @@ public class StatusAnalyzer implements StatusMessageListener, Runnable{
     }
 
     public void start() {
-        scheduler.scheduleAtFixedRate(this, 30, 30, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this, 90, 30, TimeUnit.SECONDS);
 //        scheduler.scheduleAtFixedRate(repairJobRunner, 10, 60*60, TimeUnit.SECONDS);
     }
 
