@@ -131,6 +131,8 @@ public class StatusAnalyzer implements StatusMessageListener, Runnable{
             String calm_node = getCalmestNode();
             double calmCPU = getAvgCPU(calm_node);
 
+            logger.info("calmest node: {} CPU: {}", calm_node, calmCPU);
+
             if (calmCPU < 70) {
                 if (strugglingNodes.contains(calm_node)) {
                     logger.debug("Sanitycheck failed: Calm node is in set of struggling nodes");
