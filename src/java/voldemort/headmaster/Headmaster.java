@@ -330,6 +330,9 @@ public class Headmaster implements Runnable, ZKDataListener {
             RebalancePlan plan = plan(newCluster);
         }
 
+        logger.info("Existing cluster: {}",new ClusterMapper().writeCluster(currentCluster));
+        logger.info("New cluster after rebalance: {}",new ClusterMapper().writeCluster(newCluster));
+
         try {
             Thread.sleep(10000);
         } catch (InterruptedException e) {
